@@ -5,12 +5,16 @@ import WatchMindCore
 final class HealthSource {
     private let store = HKHealthStore()
     private var query: HKAnchoredObjectQuery?
-    func start(onSample: @escaping (HeartSample) -> Void, onError: @escaping (String) -> Void) async throws {
+    private var starts = OperationSlot()
+    func start(onSample: @escaping (HeartSample) -> Void, onError: @escaping (String) -> Void) async throws -> Bool {
         guard HKHealthStore.isHealthDataAvailable(), let type = HKObjectType.quantityType(forIdentifier: .heartRate) else {
             throw NSError(domain: "WatchMind", code: 1, userInfo: [NSLocalizedDescriptionKey: "当前设备无可用健康数据。"])
         }
-        try await store.requestAuthorization(toShare: [], read: [type])
         stop()
+        guard let id = starts.begin() else { return false }
+        defer { starts.finish(id) }
+        try await store.requestAuthorization(toShare: [], read: [type])
+        guard starts.owns(id) else { return false }
         let predicate = HKQuery.predicateForSamples(withStart: Date().addingTimeInterval(-180), end: nil)
         let handler: (HKAnchoredObjectQuery, [HKSample]?, [HKDeletedObject]?, HKQueryAnchor?, Error?) -> Void = { _, samples, _, _, error in
             let values = (samples as? [HKQuantitySample] ?? []).map {
@@ -23,6 +27,7 @@ final class HealthSource {
         }
         let q = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: nil, limit: HKObjectQueryNoLimit, resultsHandler: handler)
         q.updateHandler = handler; query = q; store.execute(q)
+        return true
     }
-    func stop() { if let query { store.stop(query) }; query = nil }
+    func stop() { starts.cancel(); if let query { store.stop(query) }; query = nil }
 }

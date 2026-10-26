@@ -20,8 +20,14 @@ final class LocalStore {
         file = directory.appendingPathComponent("archive.json")
     }
     func load() throws -> Archive {
-        guard FileManager.default.fileExists(atPath: file.path) else { return Archive() }
-        let archive = try JSONDecoder().decode(Archive.self, from: Data(contentsOf: file))
+        let data: Data
+        do { data = try Data(contentsOf: file) }
+        catch {
+            let failure = error as NSError
+            if failure.domain == NSCocoaErrorDomain && failure.code == NSFileReadNoSuchFileError { return Archive() }
+            throw error
+        }
+        let archive = try JSONDecoder().decode(Archive.self, from: data)
         guard archive.version == 1 else { throw CocoaError(.fileReadCorruptFile) }
         return archive
     }

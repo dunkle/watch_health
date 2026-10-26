@@ -27,3 +27,14 @@ GitHub Actions 配置提供 Mac 无签名编译检查；仅有配置文件不代
 CI 使用 `macos-26`，官方 runner-images 文档确认该镜像有 Xcode 26 SDK，可覆盖 FoundationModels 条件编译分支；远端执行结果仍需实际 Actions 日志确认。
 
 工程重复生成检查：再次运行 XcodeGen 后 `project.pbxproj` 字节一致。`scripts/setup-linux.sh` 在已安装且已验证的工具链上重跑成功。XcodeGen 源码及其 checkout 位于 `/workspace/tools`，仅为生成工程的构建依赖，不是此环境的第二个产品仓库。
+
+
+## 2026-10-26 复查修复
+
+修复中断录音不释放状态、转写重试重入、旧异步回调污染新任务、Watch 保存时重新启动、观察授权完成后复活、锁屏写入失败永久禁用以及否定词误匹配。
+
+新增 `OperationSlot`、`WorkoutLifecycle` 与 `DeferredWriter`，由真实 iPhone/Watch 适配层调用；新增15项回归测试，覆盖任务占用、取消、重复/迟到回调、运动保存阶段、锁屏/写入中途锁定/解锁刷盘、真实存储错误与中英文否定。现共32项核心 XCTest 通过，0失败。手机/手表 Swift 文件通过语法检查。
+
+这些测试验证共享状态逻辑和文字规则，不等同于 AVAudioRecorder、Speech、HealthKit、文件保护通知在真机上的集成验证。Apple SDK 编译、实际来电/锁屏、权限弹窗和手表生命周期仍须按 Device_Test_Plan.md 回归。未取得远端 Actions 成功结果。
+
+锁屏不会降低文件保护；待保存数据仅暂存内存，进程被终止时不能保证保留。非锁屏原因的写入失败仍保守停止采集。词语规则仅处理有限否定表达，不是可靠情绪分类器。

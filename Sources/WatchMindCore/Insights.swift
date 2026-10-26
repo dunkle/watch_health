@@ -6,9 +6,25 @@ public enum Insights {
         let groups: [(String, [String])] = [
             ("可能涉及压力", ["担心", "紧张", "压力", "焦虑", "来不及", "worried", "stressed"]),
             ("可能涉及愉快", ["开心", "高兴", "期待", "喜欢", "happy", "excited"]),
-            ("可能涉及疲劳", ["累", "疲惫", "困", "tired", "exhausted"])
+            ("可能涉及疲劳", ["好累", "很累", "有点累", "太累", "累了", "疲惫", "疲劳", "好困", "很困", "困了", "tired", "exhausted"])
         ]
-        return groups.filter { $0.1.contains { text.lowercased().contains($0) } }.map(\.0)
+        let source = text.lowercased() as NSString
+        return groups.filter { _, terms in
+            terms.contains { term in
+                let english = term.unicodeScalars.allSatisfy { $0.isASCII }
+                let literal = NSRegularExpression.escapedPattern(for: term)
+                let pattern = english ? "(?<![a-z])" + literal + "(?![a-z])" : literal
+                guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+                return regex.matches(in: source as String, range: NSRange(location: 0, length: source.length)).contains { match in
+                    let prefix = source.substring(to: match.range.location)
+                    let negation = english
+                        ? #"(?:\b(?:not|never|no)|\b[a-z]+n't)\s+(?:(?:really|very|particularly|so|that)\s+){0,3}$"#
+                        : #"(?:不|没(?:有)?|无|未|并非)(?:再|太|很|那么|特别|非常|感到|觉得|什么|任何|一点(?:也)?|怎么|了|有|的|[ \t]){0,3}$"#
+                    // Suppress ambiguous negation; do not invent the opposite feeling.
+                    return prefix.range(of: negation, options: .regularExpression) == nil
+                }
+            }
+        }.map(\.0)
     }
     public static func excerpts(_ event: Episode, radius: TimeInterval = 20) -> [TranscriptSegment] {
         guard let start = event.captureStarted else { return [] }

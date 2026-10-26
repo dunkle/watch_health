@@ -12,61 +12,85 @@ struct WatchMindWatchApp: App {
 
 @MainActor
 final class WatchModel: NSObject, ObservableObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate, WCSessionDelegate {
-    @Published var active = false
-    @Published var starting = false
+    @Published private var lifecycle = WorkoutLifecycle()
+    @Published private var finishing = OperationSlot()
     @Published var bpm: Double?
     @Published var status = "先在手机开启观察"
     @Published var failure: String?
+    var active: Bool { lifecycle.phase == .running }
+    var starting: Bool { lifecycle.phase == .starting }
+    var stopping: Bool { lifecycle.phase == .stopping || finishing.current != nil }
     private let health = HKHealthStore()
     private var workout: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private var detector = HeartDetector()
-    private var discard = false
     override init() {
         super.init()
         if WCSession.isSupported() { WCSession.default.delegate = self; WCSession.default.activate() }
     }
     func start() async {
-        guard !active, !starting else { return }
-        starting = true; defer { starting = false }
+        guard finishing.current == nil, let id = lifecycle.begin() else { return }
         do {
-            guard let heart = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
+            guard let heart = HKObjectType.quantityType(forIdentifier: .heartRate) else {
+                lifecycle.finish(id); return
+            }
             try await health.requestAuthorization(toShare: [HKObjectType.workoutType()], read: [heart])
+            guard lifecycle.id == id, lifecycle.phase == .starting else { return }
             let configuration = HKWorkoutConfiguration()
             configuration.activityType = .walking; configuration.locationType = .unknown
             let session = try HKWorkoutSession(healthStore: health, configuration: configuration)
             let live = session.associatedWorkoutBuilder()
             live.dataSource = HKLiveWorkoutDataSource(healthStore: health, workoutConfiguration: configuration)
             session.delegate = self; live.delegate = self
-            workout = session; builder = live; detector.reset(); discard = false
+            workout = session; builder = live; detector.reset()
             let start = Date(); session.startActivity(with: start)
             try await live.beginCollection(at: start)
-            active = true; status = "步行会话 · 等待心率"
+            guard workout === session, lifecycle.started(id) else { return }
+            status = "步行会话 · 等待心率"
         } catch {
-            discard = true; workout?.end(); builder?.discardWorkout(); workout = nil; builder = nil
+            guard lifecycle.id == id else { return }
+            let previous = workout; let previousBuilder = builder
+            workout = nil; builder = nil; lifecycle.finish(id)
+            previous?.end(); previousBuilder?.discardWorkout()
             failure = error.localizedDescription; status = "无法开始步行会话"
         }
     }
     func stop() {
-        guard active else { return }
-        active = false; status = "正在保存步行…"; workout?.end()
+        guard let id = lifecycle.id, lifecycle.stop(id) else { return }
+        status = "正在保存步行…"; workout?.end()
     }
-    private func complete() async {
-        guard let builder, !discard else { return }
+    private func complete(_ sender: HKWorkoutSession) async {
+        guard workout === sender, let id = lifecycle.id, let builder,
+              let operation = finishing.begin() else { return }
+        lifecycle.stop(id)
+        defer {
+            // A failure or newer session invalidates this finalizer's ownership.
+            if finishing.finish(operation), lifecycle.finish(id) {
+                workout = nil; self.builder = nil
+            }
+        }
         do {
             try await builder.endCollection(at: Date())
+            guard workout === sender, lifecycle.id == id, finishing.owns(operation) else { return }
             _ = try await builder.finishWorkout()
+            guard workout === sender, lifecycle.id == id, finishing.owns(operation) else { return }
             status = "步行已保存 · 观察结束"
-        } catch { failure = error.localizedDescription; status = "保存失败，请查看健康App" }
-        workout = nil; self.builder = nil; active = false
+        } catch {
+            guard workout === sender, lifecycle.id == id else { return }
+            failure = error.localizedDescription; status = "保存失败，请查看健康App"
+        }
     }
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState, from fromState: HKWorkoutSessionState, date: Date) {
-        if toState == .ended { Task { @MainActor in await self.complete() } }
+        if toState == .ended { Task { @MainActor in await self.complete(workoutSession) } }
     }
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         Task { @MainActor in
-            self.discard = true; self.builder?.discardWorkout(); self.active = false
-            self.workout = nil; self.builder = nil; self.failure = error.localizedDescription
+            guard self.workout === workoutSession, let id = self.lifecycle.id else { return }
+            let previousBuilder = self.builder
+            self.workout = nil; self.builder = nil
+            self.finishing.cancel(); self.lifecycle.finish(id)
+            workoutSession.end(); previousBuilder?.discardWorkout()
+            self.failure = error.localizedDescription; self.status = "运动会话失败，已结束"
         }
     }
     nonisolated func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
@@ -75,7 +99,10 @@ final class WatchModel: NSObject, ObservableObject, HKWorkoutSessionDelegate, HK
               let statistics = workoutBuilder.statistics(for: type), let quantity = statistics.mostRecentQuantity() else { return }
         let value = quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
         let date = statistics.mostRecentQuantityDateInterval()?.end ?? statistics.endDate
-        Task { @MainActor in self.consume(.init(date: date, bpm: value)) }
+        Task { @MainActor in
+            guard self.builder === workoutBuilder else { return }
+            self.consume(.init(date: date, bpm: value))
+        }
     }
     private func consume(_ sample: HeartSample) {
         guard active else { return }
@@ -94,6 +121,7 @@ final class WatchModel: NSObject, ObservableObject, HKWorkoutSessionDelegate, HK
             session.transferUserInfo(["trigger": data]); status = "已排队 · 延迟事件不补录"
         }
     }
+
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
 }
 
@@ -113,6 +141,8 @@ struct WatchHome: View {
                     Text(model.status).font(.caption2).multilineTextAlignment(.center).foregroundStyle(.secondary)
                     if model.active {
                         Button("结束并保存步行", role: .destructive) { model.stop() }
+                    } else if model.stopping {
+                        ProgressView("正在保存步行…")
                     } else {
                         Button(model.starting ? "准备中…" : "开始步行观察") { confirm = true }.tint(.mint).disabled(model.starting)
                     }

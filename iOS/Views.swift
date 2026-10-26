@@ -32,6 +32,9 @@ struct RootView: View {
                     Spacer(); Button("停止") { model.stopRecording() }.font(.subheadline.bold())
                 }.foregroundStyle(.white).padding().background(Palette.coral)
                 .accessibilityElement(children: .contain)
+            } else if model.storagePaused {
+                Text("设备锁定，暂缓写入；解锁后自动重试保存。")
+                    .font(.caption).padding(10).frame(maxWidth: .infinity).background(Color.yellow.opacity(0.25))
             } else if model.demoMode {
                 HStack { Text("演示模式 · 全部为模拟数据"); Spacer(); Button("退出") { model.exitDemo() } }
                     .font(.caption).padding(10).background(Color.yellow.opacity(0.25))
