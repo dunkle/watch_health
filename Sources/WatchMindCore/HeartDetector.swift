@@ -25,7 +25,7 @@ public struct HeartDetector: Sendable {
         history.removeAll { sample.date.timeIntervalSince($0.date) > settings.window }
         let preceding = history
         history.append(sample)
-        guard preceding.count >= settings.minimumSamples else { return nil }
+        guard preceding.count >= max(1, settings.minimumSamples) else { return nil }
         let sorted = preceding.map(\.bpm).sorted()
         let mid = sorted.count / 2
         let median = sorted.count.isMultiple(of: 2) ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]

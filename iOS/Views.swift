@@ -215,6 +215,15 @@ struct EpisodeDetail: View {
                             }
                         }
                     }
+                    ForEach(Insights.moments(in: event.segments)) { moment in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("+\(Int(moment.offset))s · \(moment.changedFromPrevious ? "用词线索发生变化" : "待确认的用词线索")")
+                                .font(.caption.bold()).foregroundStyle(Palette.coral)
+                            Text(moment.text)
+                            Text(moment.cues.joined(separator: "、")).font(.caption).foregroundStyle(Palette.muted)
+                        }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Palette.background, in: RoundedRectangle(cornerRadius: 14))
+                    }
                     Text("只记录触发后的声音；无法恢复波动前的对话。文字可能有误，请以原始录音和本人反馈核对。")
                         .font(.caption).foregroundStyle(Palette.muted)
                     if event.status == .failed && event.audioName != nil {

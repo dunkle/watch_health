@@ -5,7 +5,7 @@
 ## 当前 Linux 实例已执行
 
 - 从 Swift 官方发布地址下载 Swift 6.0.3；使用 swiftlang 官方网站源码仓库的公开签名密钥验证发布包的 detached GPG 签名成功，再运行工具链。
-- `scripts/check.sh`：9 个 XCTest 测试执行完毕，0 失败。尾部 Swift Testing 的“0 tests”是另一测试框架的空套件，不替代前面的 XCTest 结果。
+- `scripts/check.sh`：17 个 XCTest 测试执行完毕，0 失败。尾部 Swift Testing 的“0 tests”是另一测试框架的空套件，不替代前面的 XCTest 结果。
 - 手机与手表的全部 Swift 文件通过 `swiftc -frontend -parse`；仅验证语法，不验证 Apple SDK 类型或链接。
 - 从官方源码构建 XcodeGen 成功，并实际生成 iPhone/Watch Xcode 工程、scheme、Info.plist 与 HealthKit entitlements。
 - 配置中的 plist 已使用 Python plistlib 成功解析。
@@ -19,3 +19,11 @@ GitHub Actions 配置提供 Mac 无签名编译检查；仅有配置文件不代
 ## 结果解释
 
 这是已实现且核心已测的原生原型，不能声称“全天实时运行”或“识别情绪准确”。当前实现明确限定前台手机触发录音，不预录、不补录过期事件，不使用云接口。
+
+## UI 设计预览
+
+`ui-preview.html` 是纯本地、明确标注模拟数据的设计参考，不是原生运行截图。已通过 Chromium/Playwright 检查导航、片段详情、本人感受选择、摘要依据、设置和390px宽度下无横向溢出，并导出 `UI-preview.png`。截图已人工查看。浏览器交互测试不能验证原生 SwiftUI 或传感器。
+
+CI 使用 `macos-26`，官方 runner-images 文档确认该镜像有 Xcode 26 SDK，可覆盖 FoundationModels 条件编译分支；远端执行结果仍需实际 Actions 日志确认。
+
+工程重复生成检查：再次运行 XcodeGen 后 `project.pbxproj` 字节一致。`scripts/setup-linux.sh` 在已安装且已验证的工具链上重跑成功。XcodeGen 源码及其 checkout 位于 `/workspace/tools`，仅为生成工程的构建依赖，不是此环境的第二个产品仓库。

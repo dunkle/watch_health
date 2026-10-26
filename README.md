@@ -2,6 +2,11 @@
 
 端侧优先的 Apple Watch＋iPhone 身心记录原型：**心率波动 → 短语音 → 本地转写 → 本人确认 → 每日回顾**。
 
+## 先看 UI
+
+- [界面设计图](docs/UI-preview.png)
+- [可交互设计预览 HTML](docs/ui-preview.html)：下载后用浏览器打开，全部为模拟数据，不录音、不连接传感器。原生运行效果需通过 Xcode 验收。
+
 ## 当前实现
 
 - 原生 SwiftUI 四页手机界面、Watch 步行观察界面与明确标识的模拟数据模式。
@@ -28,7 +33,7 @@ open WatchMind.xcodeproj
 
 ## 在 Linux 或 Mac 检查核心
 
-安装 Swift 6.0+ 后：
+Linux x86_64 云环境可运行 `./scripts/setup-linux.sh` 安装经签名验证的 Swift 6.0.3。已安装 Swift 6.0+ 时：
 
 ```bash
 ./scripts/check.sh

@@ -25,7 +25,7 @@ final class AppModel: ObservableObject {
     private var detector = HeartDetector()
     private var player: AVAudioPlayer?
     private var observationStart: Date?
-    private var lastTriggerDate: Date?
+    private var captureGate = CaptureGate()
     private var interruptionToken: NSObjectProtocol?
     private var writable = true
     private var revision = 0
@@ -73,7 +73,7 @@ final class AppModel: ObservableObject {
         defer { consenting = false }
         guard await audio.permissions() else { error = AudioCapture.CaptureError.permission.localizedDescription; return }
         do {
-            detector.reset(); observationStart = Date(); lastTriggerDate = nil
+            detector.reset(); captureGate.reset(); observationStart = Date()
             try await health.start(onSample: { [weak self] in self?.ingest($0) }, onError: { [weak self] in self?.error = $0 })
             observing = true
         } catch { self.error = error.localizedDescription }
@@ -92,17 +92,16 @@ final class AppModel: ObservableObject {
         if let trigger = detector.ingest(sample) { accept(trigger) }
     }
     private func accept(_ trigger: Trigger) {
-        guard observing, !demoMode, writable, trigger.date >= (observationStart ?? .distantFuture),
-              !episodes.contains(where: { $0.id == trigger.id }),
-              trigger.bpm.isFinite, trigger.baseline.isFinite,
-              (30...240).contains(trigger.bpm), (30...240).contains(trigger.baseline),
-              trigger.date.timeIntervalSinceNow <= 5 else { return }
-        // Deduplicate phone and Watch detections of the same physiological episode.
-        if let lastTriggerDate, abs(trigger.date.timeIntervalSince(lastTriggerDate)) < 180 { return }
-        lastTriggerDate = trigger.date
-        let fresh = Date().timeIntervalSince(trigger.date) <= 15
-        let canCapture = fresh && foreground && !busy && store != nil
-        let reason = !fresh ? "事件延迟到达，未补录当时的语音。" : (!foreground ? "手机不在前台，未自动启动麦克风。" : "录音或转写繁忙，未开始新录音。")
+        guard observing, !demoMode, writable, !episodes.contains(where: { $0.id == trigger.id }) else { return }
+        let decision = captureGate.evaluate(trigger, now: Date(), activeSince: observationStart,
+                                            foreground: foreground, busy: busy, storageReady: store != nil)
+        let canCapture: Bool
+        let reason: String
+        switch decision {
+        case .ignore: return
+        case .record: canCapture = true; reason = ""
+        case .missed(let message): canCapture = false; reason = message
+        }
         var event = Episode(trigger: trigger, status: canCapture ? .recording : .missed, note: canCapture ? "触发后录音，最多30秒；没有触发前语音。" : reason)
         guard canCapture, let store else { episodes.append(event); reports = []; save(); return }
         busy = true; recordingID = event.id

@@ -21,7 +21,7 @@ public enum Insights {
     public static func report(day: Date, events: [Episode]) -> DailyReport {
         let ready = events.filter { $0.status == .ready && !$0.transcript.isEmpty }
         let feelings = events.compactMap(\.feeling)
-        let contexts = ready.prefix(8).map { "• \($0.transcript.prefix(180))" }.joined(separator: "\n")
+        let contexts = ready.map { "• \($0.transcript)" }.joined(separator: "\n")
         let text = "今天记录了 \(events.count) 次心率波动，其中 \(ready.count) 次有可用语音。\n"
             + (feelings.isEmpty ? "尚无本人确认的感受，不能据此判断心情。" : "本人标记的感受：\(feelings.joined(separator: "、"))。")
             + (contexts.isEmpty ? "\n暂无可总结的语音上下文。" : "\n语音回顾：\n\(contexts)")
