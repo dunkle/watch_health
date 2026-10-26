@@ -1,0 +1,30 @@
+name: Validate WatchMind
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show selected SDK and compiler
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Test core
+        run: swift test -j 4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Build iPhone and embedded Watch app without signing
+        run: |
+          set -o pipefail
+          xcodebuild -project WatchMind.xcodeproj -scheme WatchMind \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build

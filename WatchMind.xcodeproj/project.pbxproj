@@ -1,0 +1,495 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0C1B04713A5E5005CCF4DB8F /* WatchMindWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846DF7D94289884D2E945480 /* WatchMindWatchApp.swift */; };
+		0E52EDB58528E67C5AF3A79E /* LocalIntelligence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0174D50091A62C076B3E6C9C /* LocalIntelligence.swift */; };
+		31D8509473A0FA9F95C737EA /* WatchMindWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 1183099AB2FB299E9D0E621D /* WatchMindWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5F9734C7ADF1F465526DD72C /* LocalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C237E4404ADF91F23429DAB4 /* LocalStore.swift */; };
+		6479D0182FBDCF1633182F0B /* WatchMindCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9C8720C7989C17BAA75FADCD /* WatchMindCore */; };
+		921DB404AEC575861AB1BD88 /* WatchReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABEC3679A0742ADD38CE2C98 /* WatchReceiver.swift */; };
+		931F1BFA85A706ABF4B0582C /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62AC2A8AC09566E06295147 /* Views.swift */; };
+		D6A0A46871E5F5E63A1A4B53 /* WatchMindApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1D84C728D8B1FA3E007CBC /* WatchMindApp.swift */; };
+		DCB2E05A26D43B472AA8601F /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1452393C6623E3F83366C1AE /* AppModel.swift */; };
+		E4F28740D01165BE1C1F3D52 /* WatchMindCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7D218EE453ED0DD421BAFA95 /* WatchMindCore */; };
+		EABF24D8A78E1D3F4A8989E3 /* HealthSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD838D663A9EFBA7D3927913 /* HealthSource.swift */; };
+		F56EA3826389D322A0CB7471 /* AudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05736F538AB3C15E86A9E525 /* AudioCapture.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		5484B816C5317D6E76CF7DA9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5FA77F28B05B18DFA055A659 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E4C8D4A7D980EBEE46E5E740;
+			remoteInfo = WatchMindWatch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		966908E326C6DCBADC0030FB /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				31D8509473A0FA9F95C737EA /* WatchMindWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0174D50091A62C076B3E6C9C /* LocalIntelligence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalIntelligence.swift; sourceTree = "<group>"; };
+		05736F538AB3C15E86A9E525 /* AudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCapture.swift; sourceTree = "<group>"; };
+		1183099AB2FB299E9D0E621D /* WatchMindWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatchMindWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1452393C6623E3F83366C1AE /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		846DF7D94289884D2E945480 /* WatchMindWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMindWatchApp.swift; sourceTree = "<group>"; };
+		9B7E1C08E5D306114294BAB2 /* WatchMind.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = WatchMind.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA1D84C728D8B1FA3E007CBC /* WatchMindApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMindApp.swift; sourceTree = "<group>"; };
+		ABEC3679A0742ADD38CE2C98 /* WatchReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchReceiver.swift; sourceTree = "<group>"; };
+		C237E4404ADF91F23429DAB4 /* LocalStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalStore.swift; sourceTree = "<group>"; };
+		DD838D663A9EFBA7D3927913 /* HealthSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSource.swift; sourceTree = "<group>"; };
+		F62AC2A8AC09566E06295147 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
+		F754A84B391DA2D30BE5ED64 /* watch_health */ = {isa = PBXFileReference; lastKnownFileType = folder; name = watch_health; path = .; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		72EB7E11454166C12A488241 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6479D0182FBDCF1633182F0B /* WatchMindCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F55FE87EC8A209D3B65C171E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E4F28740D01165BE1C1F3D52 /* WatchMindCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		101444B23532D5C720870CFC /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9B7E1C08E5D306114294BAB2 /* WatchMind.app */,
+				1183099AB2FB299E9D0E621D /* WatchMindWatch.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		7287758D247B81965AD6E4D7 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				1452393C6623E3F83366C1AE /* AppModel.swift */,
+				05736F538AB3C15E86A9E525 /* AudioCapture.swift */,
+				DD838D663A9EFBA7D3927913 /* HealthSource.swift */,
+				0174D50091A62C076B3E6C9C /* LocalIntelligence.swift */,
+				C237E4404ADF91F23429DAB4 /* LocalStore.swift */,
+				F62AC2A8AC09566E06295147 /* Views.swift */,
+				AA1D84C728D8B1FA3E007CBC /* WatchMindApp.swift */,
+				ABEC3679A0742ADD38CE2C98 /* WatchReceiver.swift */,
+			);
+			path = iOS;
+			sourceTree = "<group>";
+		};
+		A0C5453B8D5F57CDCE7BE530 /* Watch */ = {
+			isa = PBXGroup;
+			children = (
+				846DF7D94289884D2E945480 /* WatchMindWatchApp.swift */,
+			);
+			path = Watch;
+			sourceTree = "<group>";
+		};
+		A1B6BA1456562E876E91F07C = {
+			isa = PBXGroup;
+			children = (
+				7287758D247B81965AD6E4D7 /* iOS */,
+				A7D4435C5D195F4BD4E737AE /* Packages */,
+				A0C5453B8D5F57CDCE7BE530 /* Watch */,
+				101444B23532D5C720870CFC /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A7D4435C5D195F4BD4E737AE /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				F754A84B391DA2D30BE5ED64 /* watch_health */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		213518E721C4E6B576C6CC96 /* WatchMind */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 50B9FFFEB46032690751376B /* Build configuration list for PBXNativeTarget "WatchMind" */;
+			buildPhases = (
+				4F527DA3407A438F2E6380AA /* Sources */,
+				F55FE87EC8A209D3B65C171E /* Frameworks */,
+				966908E326C6DCBADC0030FB /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7926B0015B70E133210E22DE /* PBXTargetDependency */,
+			);
+			name = WatchMind;
+			packageProductDependencies = (
+				7D218EE453ED0DD421BAFA95 /* WatchMindCore */,
+			);
+			productName = WatchMind;
+			productReference = 9B7E1C08E5D306114294BAB2 /* WatchMind.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E4C8D4A7D980EBEE46E5E740 /* WatchMindWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DC4D13F4B7C858B4FD51026A /* Build configuration list for PBXNativeTarget "WatchMindWatch" */;
+			buildPhases = (
+				229BAC47502DACC50FAB4390 /* Sources */,
+				72EB7E11454166C12A488241 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WatchMindWatch;
+			packageProductDependencies = (
+				9C8720C7989C17BAA75FADCD /* WatchMindCore */,
+			);
+			productName = WatchMindWatch;
+			productReference = 1183099AB2FB299E9D0E621D /* WatchMindWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5FA77F28B05B18DFA055A659 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					213518E721C4E6B576C6CC96 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					E4C8D4A7D980EBEE46E5E740 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 84468C2C39614DB7EFD97AB0 /* Build configuration list for PBXProject "WatchMind" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = A1B6BA1456562E876E91F07C;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				82A12C5E8B5AB881D7BA6545 /* XCLocalSwiftPackageReference "." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 101444B23532D5C720870CFC /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				213518E721C4E6B576C6CC96 /* WatchMind */,
+				E4C8D4A7D980EBEE46E5E740 /* WatchMindWatch */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		229BAC47502DACC50FAB4390 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0C1B04713A5E5005CCF4DB8F /* WatchMindWatchApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4F527DA3407A438F2E6380AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DCB2E05A26D43B472AA8601F /* AppModel.swift in Sources */,
+				F56EA3826389D322A0CB7471 /* AudioCapture.swift in Sources */,
+				EABF24D8A78E1D3F4A8989E3 /* HealthSource.swift in Sources */,
+				0E52EDB58528E67C5AF3A79E /* LocalIntelligence.swift in Sources */,
+				5F9734C7ADF1F465526DD72C /* LocalStore.swift in Sources */,
+				931F1BFA85A706ABF4B0582C /* Views.swift in Sources */,
+				D6A0A46871E5F5E63A1A4B53 /* WatchMindApp.swift in Sources */,
+				921DB404AEC575861AB1BD88 /* WatchReceiver.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		7926B0015B70E133210E22DE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E4C8D4A7D980EBEE46E5E740 /* WatchMindWatch */;
+			targetProxy = 5484B816C5317D6E76CF7DA9 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2B6EA583E41FEF28A4F8FDDB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/iOS.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = "Config/iOS-Info.plist";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.watchmind.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		3B4D0297987A4ADA4CD52428 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		3CB0B0E12F0B1A2099DA79F9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		5945570CAA7B4ADB46443DE6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/Watch.entitlements;
+				INFOPLIST_FILE = "Config/Watch-Info.plist";
+				PRODUCT_BUNDLE_IDENTIFIER = com.watchmind.app.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Debug;
+		};
+		91A086C76E8AD560728A1343 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/Watch.entitlements;
+				INFOPLIST_FILE = "Config/Watch-Info.plist";
+				PRODUCT_BUNDLE_IDENTIFIER = com.watchmind.app.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Release;
+		};
+		A7BF09969390478DCAD387CF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/iOS.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = "Config/iOS-Info.plist";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.watchmind.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		50B9FFFEB46032690751376B /* Build configuration list for PBXNativeTarget "WatchMind" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A7BF09969390478DCAD387CF /* Debug */,
+				2B6EA583E41FEF28A4F8FDDB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		84468C2C39614DB7EFD97AB0 /* Build configuration list for PBXProject "WatchMind" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3B4D0297987A4ADA4CD52428 /* Debug */,
+				3CB0B0E12F0B1A2099DA79F9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DC4D13F4B7C858B4FD51026A /* Build configuration list for PBXNativeTarget "WatchMindWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5945570CAA7B4ADB46443DE6 /* Debug */,
+				91A086C76E8AD560728A1343 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		82A12C5E8B5AB881D7BA6545 /* XCLocalSwiftPackageReference "." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		7D218EE453ED0DD421BAFA95 /* WatchMindCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WatchMindCore;
+		};
+		9C8720C7989C17BAA75FADCD /* WatchMindCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WatchMindCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 5FA77F28B05B18DFA055A659 /* Project object */;
+}
