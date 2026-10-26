@@ -4,6 +4,17 @@ import AVFoundation
 
 @MainActor
 final class AppModel: ObservableObject {
+    @Published var language = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "appLanguage") ?? "system") ?? .system {
+        didSet {
+            UserDefaults.standard.set(language.rawValue, forKey: "appLanguage")
+            receiver.setLanguage(language.rawValue)
+            revision += 1
+        }
+    }
+    private var l: Localizer { Localizer(language: language) }
+    private func describe(_ error: Error) -> String {
+        (error as? AudioCapture.CaptureError)?.message(language: language) ?? l.key(error.localizedDescription)
+    }
     @Published var episodes: [Episode] = []
     @Published var reports: [DailyReport] = []
     @Published var observing = false
@@ -38,12 +49,13 @@ final class AppModel: ObservableObject {
     var visible: [Episode] { episodes.filter { $0.isDemo == demoMode } }
     var dayEvents: [Episode] { Insights.events(on: selectedDay, from: visible) }
     var report: DailyReport? {
-        reports.last { Calendar.current.isDate($0.day, inSameDayAs: selectedDay) && $0.episodeIDs == dayEvents.map(\.id) }
+        reports.last { Calendar.current.isDate($0.day, inSameDayAs: selectedDay) && $0.episodeIDs == dayEvents.map(\.id) && ($0.language ?? "zh-Hans") == language.resolved.rawValue }
     }
     init() {
         resumeStorage()
         receiver.onSample = { [weak self] sample in self?.ingest(sample) }
         receiver.onTrigger = { [weak self] trigger in self?.accept(trigger) }
+        receiver.setLanguage(language.rawValue)
         receiver.activate()
         notificationTokens.append(NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] notification in
             guard let type = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -78,7 +90,7 @@ final class AppModel: ObservableObject {
             } catch {
                 if !UIApplication.shared.isProtectedDataAvailable { storagePaused = true; return }
                 writable = false
-                self.error = "无法读取本地档案，已停止写入以保护原文件：\(error.localizedDescription)"
+                self.error = l("无法读取本地档案，已停止写入以保护原文件：\(describe(error))")
                 return
             }
         }
@@ -97,7 +109,7 @@ final class AppModel: ObservableObject {
         } catch {
             writable = false; observing = false; starts.cancel(); consenting = false
             health.stop(); audio.interrupt()
-            self.error = "保存失败，已停止采集以保护数据，请不要退出应用：\(error.localizedDescription)"
+            self.error = l("保存失败，已停止采集以保护数据，请不要退出应用：\(describe(error))")
             return false
         }
     }
@@ -111,7 +123,7 @@ final class AppModel: ObservableObject {
         consenting = true
         defer { if starts.finish(request) { consenting = false } }
         guard await audio.permissions() else {
-            if starts.owns(request) { error = AudioCapture.CaptureError.permission.localizedDescription }; return
+            if starts.owns(request) { error = AudioCapture.CaptureError.permission.message(language: language) }; return
         }
         guard starts.owns(request), !demoMode, writable else { return }
         do {
@@ -119,7 +131,7 @@ final class AppModel: ObservableObject {
             let ready = try await health.start(onSample: { [weak self] in self?.ingest($0) }, onError: { [weak self] in self?.error = $0 })
             guard ready, starts.owns(request), !demoMode, writable else { return }
             observationStart = Date(); observing = true
-        } catch { if starts.owns(request) { self.error = error.localizedDescription } }
+        } catch { if starts.owns(request) { self.error = describe(error) } }
     }
     func stop() {
         starts.cancel(); consenting = false
@@ -156,6 +168,7 @@ final class AppModel: ObservableObject {
         let id = event.id
         recordingID = id; player?.stop(); playingID = nil
         event.audioName = store.audioURL(id).lastPathComponent
+        event.speechLanguage = language.resolved.rawValue
         episodes.append(event); reports = []
         guard save() else {
             modify(id) { $0.status = .failed; $0.note = "档案暂不可写，未启动录音；解锁后重试保存。" }
@@ -168,14 +181,14 @@ final class AppModel: ObservableObject {
                 switch result {
                 case .success(let url): Task { await self.transcribe(id: id, url: url, operation: operation) }
                 case .failure(let error):
-                    self.modify(id) { $0.status = .failed; $0.note = error.localizedDescription }
+                    self.modify(id) { $0.status = .failed; $0.note = describe(error) }
                     self.work.finish(operation)
                 }
             }
             modify(id) { $0.captureStarted = startedAt }
         } catch {
-            modify(id) { $0.status = .failed; $0.note = error.localizedDescription }
-            recordingID = nil; work.finish(operation); self.error = error.localizedDescription
+            modify(id) { $0.status = .failed; $0.note = describe(error) }
+            recordingID = nil; work.finish(operation); self.error = describe(error)
         }
     }
     func stopRecording() { audio.stop() }
@@ -188,13 +201,13 @@ final class AppModel: ObservableObject {
         modify(id) { $0.status = .transcribing }
         guard writable else { return }
         do {
-            let (text, segments) = try await audio.transcribe(url: url)
+            let (text, segments) = try await audio.transcribe(url: url, language: episodes.first(where: { $0.id == id })?.transcriptionLanguage ?? language.resolved)
             guard work.owns(operation) else { return }
             modify(id) {
                 $0.transcript = text; $0.segments = segments; $0.status = .ready
                 $0.note = text.isEmpty ? "未识别到可用语音。" : "本地转写完成。请核对文字，心率变化不等于情绪变化。"
             }
-        } catch { modify(id) { $0.status = .failed; $0.note = error.localizedDescription } }
+        } catch { modify(id) { $0.status = .failed; $0.note = describe(error) } }
     }
     func retry(_ event: Episode) async {
         guard writable, archiveLoaded, !storagePaused, !event.isDemo,
@@ -202,7 +215,7 @@ final class AppModel: ObservableObject {
               let operation = work.begin() else { return }
         // Reserve before the first suspension; duplicate taps and heart triggers now see busy=true.
         defer { work.finish(operation) }
-        guard await audio.permissions() else { error = AudioCapture.CaptureError.permission.localizedDescription; return }
+        guard await audio.permissions() else { error = AudioCapture.CaptureError.permission.message(language: language); return }
         guard work.owns(operation) else { return }
         await transcribe(id: event.id, url: store.directory.appendingPathComponent(name), operation: operation)
     }
@@ -216,7 +229,7 @@ final class AppModel: ObservableObject {
             try AVAudioSession.sharedInstance().setActive(true)
             player = try AVAudioPlayer(contentsOf: store.directory.appendingPathComponent(name))
             player?.play(); playingID = event.id
-        } catch { self.error = error.localizedDescription }
+        } catch { self.error = describe(error) }
     }
     func delete(_ event: Episode) {
         guard !busy, writable, !storagePaused, archiveLoaded else { return }
@@ -224,7 +237,7 @@ final class AppModel: ObservableObject {
             if let name = event.audioName { try store?.deleteAudio(name) }
             player?.stop(); playingID = nil
             episodes.removeAll { $0.id == event.id }; reports = []; save()
-        } catch { self.error = "删除音频失败：\(error.localizedDescription)" }
+        } catch { self.error = l("删除音频失败：\(describe(error))") }
     }
     func erase() {
         guard !busy, writable, !storagePaused, archiveLoaded else { return }
@@ -232,7 +245,7 @@ final class AppModel: ObservableObject {
         do {
             for event in episodes { if let name = event.audioName { try store?.deleteAudio(name) } }
             episodes = []; reports = []; save()
-        } catch { self.error = "清除未完成：\(error.localizedDescription)" }
+        } catch { self.error = l("清除未完成：\(describe(error))") }
     }
     func summarize() async {
         guard !summarizing, !dayEvents.isEmpty else { return }
@@ -240,27 +253,28 @@ final class AppModel: ObservableObject {
         let events = dayEvents; let day = selectedDay; let snapshot = revision
         do {
             let report: DailyReport
-            if demoMode { report = Insights.report(day: day, events: events) }
-            else { report = try await LocalIntelligence.summarize(day: day, events: events) }
+            if demoMode { report = Insights.report(day: day, events: events, language: language) }
+            else { report = try await LocalIntelligence.summarize(day: day, events: events, language: language.resolved) }
             guard revision == snapshot, events.map(\.id) == Insights.events(on: day, from: visible).map(\.id), !busy else { return }
             reports.removeAll { Calendar.current.isDate($0.day, inSameDayAs: day) }
             reports.append(report); save()
-        } catch { self.error = "端侧模型暂不可用：\(error.localizedDescription)。可使用规则摘要或稍后重试。" }
+        } catch { self.error = l("端侧模型暂不可用：\(describe(error))。可使用规则摘要或稍后重试。") }
     }
     func ruleSummary() {
         guard !dayEvents.isEmpty else { return }
         reports.removeAll { Calendar.current.isDate($0.day, inSameDayAs: selectedDay) }
-        reports.append(Insights.report(day: selectedDay, events: dayEvents)); save()
+        reports.append(Insights.report(day: selectedDay, events: dayEvents, language: language)); save()
     }
     func loadDemo() {
         guard !busy, archiveLoaded else { return }
         stop(); demoMode = true; selectedDay = Date()
         episodes.removeAll(where: { $0.isDemo })
-        let texts = ["今天要讲这个方案，我有点紧张，先把重点说清楚。", "刚散步回来，和朋友聊得很开心。", "今天有点累了，今晚早点休息。"]
+        let texts = [l("今天要讲这个方案，我有点紧张，先把重点说清楚。"), l("刚散步回来，和朋友聊得很开心。"), l("今天有点累了，今晚早点休息。") ]
         for index in 0..<3 {
             let date = Date().addingTimeInterval(Double(index - 3) * 1800)
             var event = Episode(trigger: Trigger(date: date, bpm: Double(103 + index * 5), baseline: 74), status: .ready, note: "模拟数据，不来自传感器或真实录音。", isDemo: true)
             event.captureStarted = date.addingTimeInterval(1); event.transcript = texts[index]
+            event.speechLanguage = language.resolved.rawValue
             event.segments = [.init(text: texts[index], offset: 0, duration: 8)]
             episodes.append(event)
         }

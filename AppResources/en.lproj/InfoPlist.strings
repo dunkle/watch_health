@@ -1,0 +1,4 @@
+"NSHealthShareUsageDescription" = "Read heart rate during observation sessions you start, to detect changes for review. Not for medical diagnosis.";
+"NSHealthUpdateUsageDescription" = "Save the workout sessions you explicitly start to Apple Health.";
+"NSMicrophoneUsageDescription" = "After you authorize and start observation, a heart rate change may trigger up to 30 seconds of audio, stored only on this device.";
+"NSSpeechRecognitionUsageDescription" = "Transcribe audio you consented to record on this device. If offline transcription is unavailable, no cloud fallback is used.";

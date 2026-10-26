@@ -7,11 +7,14 @@ import WatchMindCore
 @main
 struct WatchMindWatchApp: App {
     @StateObject private var model = WatchModel()
-    var body: some Scene { WindowGroup { WatchHome().environmentObject(model) } }
+    var body: some Scene { WindowGroup { WatchHome().environmentObject(model).environment(\.locale, model.language.locale) } }
 }
 
 @MainActor
 final class WatchModel: NSObject, ObservableObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate, WCSessionDelegate {
+    @Published var language = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "appLanguage") ?? "system") ?? .system {
+        didSet { UserDefaults.standard.set(language.rawValue, forKey: "appLanguage") }
+    }
     @Published private var lifecycle = WorkoutLifecycle()
     @Published private var finishing = OperationSlot()
     @Published var bpm: Double?
@@ -122,10 +125,21 @@ final class WatchModel: NSObject, ObservableObject, HKWorkoutSessionDelegate, HK
         }
     }
 
-    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
+    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        applyLanguage(session.receivedApplicationContext)
+    }
+    nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        applyLanguage(applicationContext)
+    }
+    nonisolated private func applyLanguage(_ context: [String: Any]) {
+        guard let raw = context["language"] as? String, let language = AppLanguage(rawValue: raw) else { return }
+        Task { @MainActor in self.language = language }
+    }
 }
 
 struct WatchHome: View {
+    @Environment(\.locale) private var locale
+    private var l: Localizer { Localizer(locale: locale) }
     @EnvironmentObject var model: WatchModel
     @State private var confirm = false
     var body: some View {
@@ -133,28 +147,33 @@ struct WatchHome: View {
             ScrollView {
                 VStack(spacing: 12) {
                     Image(systemName: "leaf.fill").foregroundStyle(.mint)
-                    Text("留意此刻").font(.headline)
+                    Text(l("留意此刻")).font(.headline)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(model.bpm.map { "\(Int($0))" } ?? "—").font(.system(size: 44, weight: .light, design: .rounded))
-                        Text("次/分").font(.caption2).foregroundStyle(.secondary)
+                        Text(l("次/分")).font(.caption2).foregroundStyle(.secondary)
                     }
-                    Text(model.status).font(.caption2).multilineTextAlignment(.center).foregroundStyle(.secondary)
+                    Text(l.key(model.status)).font(.caption2).multilineTextAlignment(.center).foregroundStyle(.secondary)
                     if model.active {
-                        Button("结束并保存步行", role: .destructive) { model.stop() }
+                        Button(l("结束并保存步行"), role: .destructive) { model.stop() }
                     } else if model.stopping {
-                        ProgressView("正在保存步行…")
+                        ProgressView(l("正在保存步行…"))
                     } else {
-                        Button(model.starting ? "准备中…" : "开始步行观察") { confirm = true }.tint(.mint).disabled(model.starting)
+                        Button(model.starting ? l("准备中…") : l("开始步行观察")) { confirm = true }.tint(.mint).disabled(model.starting)
                     }
-                    Text("只用于真实步行。录音由已授权且在前台的手机完成，手表不录音。")
+                    Picker(l("语言 / Language"), selection: $model.language) {
+                        Text(l("跟随系统")).tag(AppLanguage.system)
+                        Text("简体中文").tag(AppLanguage.simplifiedChinese)
+                        Text("English").tag(AppLanguage.english)
+                    }
+                    Text(l("只用于真实步行。录音由已授权且在前台的手机完成，手表不录音。"))
                         .font(.system(size: 11)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }.padding(.horizontal, 8)
             }
-            .confirmationDialog("这会启动并保存一次步行运动，增加耗电。请先在手机授权观察。", isPresented: $confirm) {
-                Button("我正在步行，开始") { Task { await model.start() } }
+            .confirmationDialog(l("这会启动并保存一次步行运动，增加耗电。请先在手机授权观察。"), isPresented: $confirm) {
+                Button(l("我正在步行，开始")) { Task { await model.start() } }
             }
-            .alert("请检查", isPresented: Binding(get: { model.failure != nil }, set: { if !$0 { model.failure = nil } })) {
-                Button("知道了") { model.failure = nil }
+            .alert(l("请检查"), isPresented: Binding(get: { model.failure != nil }, set: { if !$0 { model.failure = nil } })) {
+                Button(l("知道了")) { model.failure = nil }
             } message: { Text(model.failure ?? "") }
         }
     }

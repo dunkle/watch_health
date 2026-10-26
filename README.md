@@ -18,6 +18,16 @@
 
 **这是待真机验收的原生工程，不是已经验证可全天运行的产品。** 心率波动不能确定情绪；不预录就没有波动前的谈话。普通心率采样可能稀疏，后台不能保证自动开启麦克风。手机前台、权限和本次会话同意是录音前提。手表运动模式仅用于真实步行，会保存运动记录。
 
+## 中文 / English
+
+手机“设置 → 语言 / Language”支持“跟随系统、简体中文、English”，选择会保留并同步到可连接的 Watch。手表也提供语言选项。跟随系统按各设备的系统偏好解析，不支持的语言回退到英文。
+
+界面、状态、感受标签和规则摘要支持中英文。新录音使用所选语言的离线识别（中文 zh-CN / 英文 en-US），音频保留语言信息，重试不会因后来切换界面语言而改用另一种语言。旧版录音按原来的中文识别。旧转写不会自动翻译；摘要切换语言后需重新生成。录音、转写、授权和摘要任务进行中暂不能切换手机语言。
+
+权限说明提供两种资源，但系统权限弹窗与系统错误的语言由 iOS/watchOS 的系统或单独 App 语言设置决定，应用内切换不会强制改变系统弹窗。
+
+The app supports Simplified Chinese, English, and following the system language. Choose a language in Settings → Language. New recordings use on-device recognition for that language; retries retain the recording's original language. Private transcripts are not automatically translated. Regenerate a summary after changing language. No cloud fallback is used.
+
 ## 在 Apple Silicon Mac（用户设备为 M3 Pro）上运行
 
 需要兼容的完整 Xcode、iOS 17+/watchOS 10+设备与可用签名能力。端侧大模型需要 Xcode 26+ SDK 和运行时模型支持；不满足时仍可运行规则摘要。
@@ -28,6 +38,8 @@ cd watch_health
 ./scripts/setup-mac.sh
 open WatchMind.xcodeproj
 ```
+
+构建脚本显示5个阶段：检查 Xcode、准备 XcodeGen、生成工程、核心测试、原生编译。每阶段显示耗时；长任务每15秒显示仍在运行。进度条表示已完成阶段数，**不代表 Xcode 编译百分比**。错误输出与退出码保留，失败不会显示完成。
 
 为两个 target 设置自己的 Team、唯一 Bundle ID 及匹配的 Watch companion ID，再运行到配对 iPhone 和 Watch。详细步骤与验收：[真机运行计划](docs/Device_Test_Plan.md)。没有后端、云模型或 API Key 配置。
 

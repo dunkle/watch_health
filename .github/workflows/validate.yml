@@ -16,6 +16,10 @@ jobs:
         run: |
           xcodebuild -version
           swift --version
+      - name: Check translations and build progress behavior
+        run: |
+          python3 scripts/check-localizations.py
+          python3 scripts/tests/test_setup_progress.py
       - name: Test core
         run: swift test -j 4
       - name: Generate Xcode project

@@ -14,14 +14,16 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
     private var deadline: Task<Void, Never>?
     enum CaptureError: LocalizedError {
         case permission, unavailable, recording, interrupted, busy, timeout
-        var errorDescription: String? {
+        var errorDescription: String? { message(language: .system) }
+        func message(language: AppLanguage) -> String {
+            let l = Localizer(language: language)
             switch self {
-            case .permission: return "请在系统设置允许麦克风和语音识别。"
-            case .unavailable: return "当前设备或语言不支持本地转写。不会上传到云端；可保留音频后重试。"
-            case .recording: return "录音未成功完成，请检查音频设备。"
-            case .interrupted: return "录音被系统中断，已结束任务；保留的片段可手动重试转写。"
-            case .busy: return "已有录音或转写任务，请稍后重试。"
-            case .timeout: return "本地转写超时，可稍后重试。"
+            case .permission: return l("请在系统设置允许麦克风和语音识别。")
+            case .unavailable: return l("当前设备或语言不支持本地转写。不会上传到云端；可保留音频后重试。")
+            case .recording: return l("录音未成功完成，请检查音频设备。")
+            case .interrupted: return l("录音被系统中断，已结束任务；保留的片段可手动重试转写。")
+            case .busy: return l("已有录音或转写任务，请稍后重试。")
+            case .timeout: return l("本地转写超时，可稍后重试。")
             }
         }
     }
@@ -75,9 +77,9 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         if let error { completion(.failure(error)) } else { completion(.success(url)) }
     }
-    func transcribe(url: URL) async throws -> (String, [TranscriptSegment]) {
+    func transcribe(url: URL, language: AppLanguage) async throws -> (String, [TranscriptSegment]) {
         guard recorder == nil, let id = speechSlot.begin() else { throw CaptureError.busy }
-        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN")),
+        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language.speechLocaleIdentifier)),
               recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
             speechSlot.finish(id); throw CaptureError.unavailable
         }

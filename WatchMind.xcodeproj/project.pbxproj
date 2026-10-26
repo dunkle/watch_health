@@ -14,6 +14,8 @@
 		6479D0182FBDCF1633182F0B /* WatchMindCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9C8720C7989C17BAA75FADCD /* WatchMindCore */; };
 		921DB404AEC575861AB1BD88 /* WatchReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABEC3679A0742ADD38CE2C98 /* WatchReceiver.swift */; };
 		931F1BFA85A706ABF4B0582C /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62AC2A8AC09566E06295147 /* Views.swift */; };
+		9D1BDECECF41017025CE0FF3 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA9EC9C9CDFE6A561B89590A /* InfoPlist.strings */; };
+		ADE911F72C8BC21609574489 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA9EC9C9CDFE6A561B89590A /* InfoPlist.strings */; };
 		D6A0A46871E5F5E63A1A4B53 /* WatchMindApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1D84C728D8B1FA3E007CBC /* WatchMindApp.swift */; };
 		DCB2E05A26D43B472AA8601F /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1452393C6623E3F83366C1AE /* AppModel.swift */; };
 		E4F28740D01165BE1C1F3D52 /* WatchMindCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7D218EE453ED0DD421BAFA95 /* WatchMindCore */; };
@@ -50,8 +52,10 @@
 		05736F538AB3C15E86A9E525 /* AudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCapture.swift; sourceTree = "<group>"; };
 		1183099AB2FB299E9D0E621D /* WatchMindWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatchMindWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1452393C6623E3F83366C1AE /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		18A1F2C2745719178F560105 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		846DF7D94289884D2E945480 /* WatchMindWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMindWatchApp.swift; sourceTree = "<group>"; };
 		9B7E1C08E5D306114294BAB2 /* WatchMind.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = WatchMind.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30B6582E870776E5362B00A /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		AA1D84C728D8B1FA3E007CBC /* WatchMindApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMindApp.swift; sourceTree = "<group>"; };
 		ABEC3679A0742ADD38CE2C98 /* WatchReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchReceiver.swift; sourceTree = "<group>"; };
 		C237E4404ADF91F23429DAB4 /* LocalStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalStore.swift; sourceTree = "<group>"; };
@@ -115,6 +119,7 @@
 		A1B6BA1456562E876E91F07C = {
 			isa = PBXGroup;
 			children = (
+				EE03AC92724426EF281F0926 /* AppResources */,
 				7287758D247B81965AD6E4D7 /* iOS */,
 				A7D4435C5D195F4BD4E737AE /* Packages */,
 				A0C5453B8D5F57CDCE7BE530 /* Watch */,
@@ -130,6 +135,14 @@
 			name = Packages;
 			sourceTree = "<group>";
 		};
+		EE03AC92724426EF281F0926 /* AppResources */ = {
+			isa = PBXGroup;
+			children = (
+				DA9EC9C9CDFE6A561B89590A /* InfoPlist.strings */,
+			);
+			path = AppResources;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -138,6 +151,7 @@
 			buildConfigurationList = 50B9FFFEB46032690751376B /* Build configuration list for PBXNativeTarget "WatchMind" */;
 			buildPhases = (
 				4F527DA3407A438F2E6380AA /* Sources */,
+				77E9BFAE3E411FCB973EF1A2 /* Resources */,
 				F55FE87EC8A209D3B65C171E /* Frameworks */,
 				966908E326C6DCBADC0030FB /* Embed Watch Content */,
 			);
@@ -159,6 +173,7 @@
 			buildConfigurationList = DC4D13F4B7C858B4FD51026A /* Build configuration list for PBXNativeTarget "WatchMindWatch" */;
 			buildPhases = (
 				229BAC47502DACC50FAB4390 /* Sources */,
+				A225A9B1D4C1352F95F8044E /* Resources */,
 				72EB7E11454166C12A488241 /* Frameworks */,
 			);
 			buildRules = (
@@ -198,6 +213,7 @@
 			knownRegions = (
 				Base,
 				en,
+				"zh-Hans",
 			);
 			mainGroup = A1B6BA1456562E876E91F07C;
 			minimizedProjectReferenceProxies = 1;
@@ -214,6 +230,25 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		77E9BFAE3E411FCB973EF1A2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9D1BDECECF41017025CE0FF3 /* InfoPlist.strings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A225A9B1D4C1352F95F8044E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ADE911F72C8BC21609574489 /* InfoPlist.strings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		229BAC47502DACC50FAB4390 /* Sources */ = {
@@ -248,6 +283,18 @@
 			targetProxy = 5484B816C5317D6E76CF7DA9 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		DA9EC9C9CDFE6A561B89590A /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A30B6582E870776E5362B00A /* en */,
+				18A1F2C2745719178F560105 /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		2B6EA583E41FEF28A4F8FDDB /* Release */ = {

@@ -7,6 +7,7 @@ struct WatchMindApp: App {
     var body: some Scene {
         WindowGroup {
             RootView().environmentObject(model)
+                .environment(\.locale, model.language.locale)
                 .onChange(of: scenePhase) { _, phase in model.setForeground(phase == .active) }
         }
     }

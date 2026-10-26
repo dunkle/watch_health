@@ -36,7 +36,7 @@ public struct ContextMoment: Identifiable, Equatable, Sendable {
 public extension Insights {
     /// Groups neighboring speech tokens so Chinese words split across segments still match.
     /// These are linguistic candidates, not inferred or confirmed emotions.
-    static func moments(in segments: [TranscriptSegment]) -> [ContextMoment] {
+    static func moments(in segments: [TranscriptSegment], language: AppLanguage = .simplifiedChinese) -> [ContextMoment] {
         var chunks: [(Double, String)] = []
         var start: Double?
         var previousEnd: Double = 0
@@ -46,16 +46,18 @@ public extension Insights {
                 chunks.append((beginning, text)); start = nil; text = ""
             }
             if start == nil { start = segment.offset }
+            if let last = text.last, let first = segment.text.first,
+               last.isASCII && first.isASCII && last.isLetter && first.isLetter { text += " " }
             text += segment.text
             previousEnd = segment.offset + segment.duration
-            if segment.text.last.map({ "。！？!?".contains($0) }) ?? false {
+            if segment.text.last.map({ "。！？!?.".contains($0) }) ?? false {
                 chunks.append((start ?? segment.offset, text)); start = nil; text = ""
             }
         }
         if let start { chunks.append((start, text)) }
         var previous: Set<String> = []
         return chunks.compactMap { offset, text in
-            let candidates = cues(in: text)
+            let candidates = cues(in: text, language: language)
             guard !candidates.isEmpty else { return nil }
             let current = Set(candidates)
             let changed = !previous.isEmpty && current != previous

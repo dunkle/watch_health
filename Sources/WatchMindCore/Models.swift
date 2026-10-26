@@ -40,6 +40,11 @@ public struct Episode: Codable, Identifiable, Sendable {
     public var note: String
     public var feeling: String?
     public var audioName: String?
+    public var speechLanguage: String?
+    /// Before language selection existed, all real recordings used zh-CN.
+    public var transcriptionLanguage: AppLanguage {
+        AppLanguage(rawValue: speechLanguage ?? "zh-Hans")?.resolved ?? .simplifiedChinese
+    }
     public var isDemo: Bool
     public init(trigger: Trigger, status: CaptureStatus = .missed, note: String = "", isDemo: Bool = false) {
         self.trigger = trigger; self.status = status; self.note = note; self.isDemo = isDemo
@@ -53,8 +58,9 @@ public struct DailyReport: Codable, Sendable {
     public var engine: String
     public var episodeIDs: [UUID]
     public var generatedAt: Date
-    public init(day: Date, text: String, engine: String, episodeIDs: [UUID], generatedAt: Date = Date()) {
+    public var language: String?
+    public init(day: Date, text: String, engine: String, episodeIDs: [UUID], generatedAt: Date = Date(), language: String? = nil) {
         self.day = day; self.text = text; self.engine = engine
-        self.episodeIDs = episodeIDs; self.generatedAt = generatedAt
+        self.episodeIDs = episodeIDs; self.generatedAt = generatedAt; self.language = language
     }
 }

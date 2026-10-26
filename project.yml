@@ -1,6 +1,7 @@
 name: WatchMind
 options:
   bundleIdPrefix: com.watchmind
+  developmentLanguage: en
   deploymentTarget:
     iOS: '17.0'
     watchOS: '10.0'
@@ -18,7 +19,7 @@ targets:
   WatchMind:
     type: application
     platform: iOS
-    sources: [iOS]
+    sources: [iOS, AppResources]
     dependencies:
       - package: WatchMindCore
       - target: WatchMindWatch
@@ -47,7 +48,7 @@ targets:
   WatchMindWatch:
     type: application
     platform: watchOS
-    sources: [Watch]
+    sources: [Watch, AppResources]
     dependencies:
       - package: WatchMindCore
     settings:
