@@ -43,6 +43,13 @@ final class AppModel: ObservableObject {
     @Published var transcriptionCompleted = 0
     @Published var transcriptionTotal = 0
     @Published var episodes: [Episode] = []
+    @Published var markers: [MomentMarker] = []
+    @Published var lastMarkedID: UUID?
+    @Published var transcriptionID: UUID?
+    @Published var watchReachable: Bool?
+    @Published var lastWatchPacketAt: Date?
+    @Published var summaryDay: Date?
+    @Published var summaryFailure: String?
     @Published var reports: [DailyReport] = []
     @Published var observing = false
     @Published var foreground = true
@@ -77,6 +84,7 @@ final class AppModel: ObservableObject {
     private var revision = 0
 
     var busy: Bool { work.current != nil }
+    var canWriteArchive: Bool { writable && archiveLoaded && !storagePaused }
     var visibleMetrics: [MetricReading] { demoMode ? demoMetrics : metrics }
     var dayHeartPoints: [HeartPoint] {
         heartPoints.filter { $0.isDemo == demoMode && Calendar.current.isDate($0.sample.date, inSameDayAs: selectedDay) }
@@ -84,14 +92,17 @@ final class AppModel: ObservableObject {
     var currentRecording: Episode? { episodes.first { $0.id == recordingID } }
     func recordingOwner(_ event: Episode) -> Episode? { event.owner(in: episodes) }
     var visible: [Episode] { episodes.filter { $0.isDemo == demoMode } }
+    var visibleMarkers: [MomentMarker] { markers.filter { $0.isDemo == demoMode && $0.owner(in: visible) != nil } }
+    var hourBuckets: [HourBucket] { HourTimeline.buckets(on: selectedDay, episodes: visible, markers: visibleMarkers) }
     var dayEvents: [Episode] { Insights.events(on: selectedDay, from: visible) }
     var report: DailyReport? {
         reports.last { Calendar.current.isDate($0.day, inSameDayAs: selectedDay) && $0.episodeIDs == dayEvents.map(\.id) && ($0.language ?? "zh-Hans") == language.resolved.rawValue }
     }
     init() {
         resumeStorage()
-        receiver.onSample = { [weak self] sample in self?.ingest(sample) }
-        receiver.onTrigger = { [weak self] trigger in self?.accept(trigger) }
+        receiver.onSample = { [weak self] sample in self?.lastWatchPacketAt = Date(); self?.ingest(sample) }
+        receiver.onTrigger = { [weak self] trigger in self?.lastWatchPacketAt = Date(); self?.accept(trigger) }
+        receiver.onConnection = { [weak self] in self?.watchReachable = $0 }
         receiver.setLanguage(language.rawValue)
         receiver.activate()
         notificationTokens.append(NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: nil) { [weak self] notification in
@@ -139,6 +150,7 @@ final class AppModel: ObservableObject {
                 let store = try LocalStore()
                 let archive = try store.load()
                 self.store = store; episodes = archive.episodes; reports = archive.reports
+                markers = archive.markers.filter { $0.owner(in: archive.episodes) != nil }
                 heartPoints = Array(archive.heartPoints.filter { $0.sample.date >= Date().addingTimeInterval(-7 * 86400) }.suffix(60000))
                 metrics = archive.metrics.filter { $0.date >= Date().addingTimeInterval(-14 * 86400) }
                 archiveLoaded = true
@@ -162,7 +174,7 @@ final class AppModel: ObservableObject {
         revision += 1
         guard writable, archiveLoaded, let store else { return false }
         do {
-            let persisted = try archiveWriter.save(Archive(episodes: episodes, reports: reports, heartPoints: heartPoints, metrics: metrics),
+            let persisted = try archiveWriter.save(Archive(episodes: episodes, reports: reports, heartPoints: heartPoints, metrics: metrics, markers: markers),
                 isAvailable: { UIApplication.shared.isProtectedDataAvailable }, write: store.save)
             storagePaused = !persisted
             return persisted
@@ -251,7 +263,8 @@ final class AppModel: ObservableObject {
             episodes.append(event); reports = []; save(); return
         }
         let id = event.id
-        recordingID = id; updateWakefulness(); player?.stop(); playingID = nil
+        recordingID = id; transcriptionCompleted = 0; transcriptionTotal = 0
+        updateWakefulness(); player?.stop(); playingID = nil
         event.audioName = store.audioURL(id).lastPathComponent
         event.speechLanguage = language.resolved.rawValue
         event.maximumDuration = RecordingPolicy.duration(minutes: recordingMinutes)
@@ -355,12 +368,13 @@ final class AppModel: ObservableObject {
     }
     private func transcribe(id: UUID, operation: UUID) async {
         guard work.owns(operation) else { return }
-        defer { work.finish(operation) }
+        transcriptionID = id
+        defer { if transcriptionID == id { transcriptionID = nil }; work.finish(operation) }
         guard writable, UIApplication.shared.isProtectedDataAvailable else {
             modify(id) { $0.status = .failed; $0.note = "数据暂不可用，未转写；解锁后可手动重试。" }; return
         }
         guard let event = episodes.first(where: { $0.id == id }), let store else { return }
-        modify(id) { $0.status = .transcribing }
+        modify(id) { $0.status = .transcribing; $0.transcriptionAttempted = true }
         guard writable else { return }
         let parts: [RecordingPart]
         if let saved = event.recordingParts, !saved.isEmpty { parts = saved }
@@ -370,6 +384,7 @@ final class AppModel: ObservableObject {
         var texts: [String] = [], segments: [TranscriptSegment] = []
         var failures = 0, successes = 0, finishedChunks = 0
         var lastFailure: String?
+        var recoveredEnds: [UUID: Date] = [:]
         transcriptionCompleted = 0; transcriptionTotal = 0
         for part in parts {
             do {
@@ -379,6 +394,9 @@ final class AppModel: ObservableObject {
                         self?.transcriptionTotal = finishedChunks + total
                     }
                 successes += 1; failures += result.failedChunks
+                if part.endedAt == nil, result.duration.isFinite, result.duration > 0 {
+                    recoveredEnds[part.id] = part.startedAt.addingTimeInterval(result.duration)
+                }
                 texts.append(result.text)
                 let offset = part.startedAt.timeIntervalSince(event.captureStarted ?? part.startedAt)
                 segments += result.segments.map { .init(text: $0.text, offset: $0.offset + offset, duration: $0.duration) }
@@ -387,6 +405,13 @@ final class AppModel: ObservableObject {
             guard work.owns(operation) else { return }
             // Checkpoint long jobs so a later suspension does not erase all completed text.
             modify(id) {
+                if var parts = $0.recordingParts {
+                    for index in parts.indices {
+                        if let end = recoveredEnds[parts[index].id] { parts[index].endedAt = end }
+                    }
+                    $0.recordingParts = parts
+                    if event.captureEnded == nil { $0.captureEnded = parts.compactMap(\.endedAt).max() }
+                }
                 // A failed retry must not erase previously saved successful text.
                 if successes > 0 { $0.transcript = texts.joined(separator: "\n"); $0.segments = segments }
                 $0.failedTranscriptionChunks = failures
@@ -438,6 +463,32 @@ final class AppModel: ObservableObject {
         } catch { self.error = describe(error) }
     }
     func confirm(_ id: UUID, feeling: String) { modify(id) { $0.feeling = feeling } }
+    @discardableResult func markMoment() -> UUID? {
+        guard writable, archiveLoaded, !storagePaused, foreground, !demoMode,
+              let owner = currentRecording, let start = owner.captureStarted,
+              recovery?.phase != .finished, Date() >= start else { return nil }
+        let marker = MomentMarker(date: Date(), recordingID: owner.id)
+        markers.append(marker)
+        if save() { lastMarkedID = marker.id; return marker.id }
+        // Keep the unsaved marker in memory if protected storage became unavailable.
+        return nil
+    }
+    func updateMarker(_ id: UUID, note: String) {
+        guard writable, archiveLoaded, !storagePaused, let index = markers.firstIndex(where: { $0.id == id }) else { return }
+        markers[index].note = String(note.prefix(500)); save()
+    }
+    func deleteMarker(_ id: UUID) {
+        guard writable, archiveLoaded, !storagePaused else { return }
+        markers.removeAll { $0.id == id }; save()
+    }
+    func playMarker(_ marker: MomentMarker) {
+        guard recordingID == nil, markers.contains(where: { $0.id == marker.id }) else { return }
+        if playingID == marker.id { player?.stop(); playingID = nil; return }
+        guard let location = marker.audioLocation(in: episodes) else {
+            error = l("此事件发生在录音中断的空档，没有对应音频。"); return
+        }
+        playAudio(location, eventID: marker.id)
+    }
     func play(_ event: Episode) {
         guard recordingID == nil else { return }
         if playingID == event.id { player?.stop(); playingID = nil; return }
@@ -471,7 +522,8 @@ final class AppModel: ObservableObject {
         do {
             for name in event.audioNames { try store?.deleteAudio(name) }
             player?.stop(); playingID = nil
-            episodes.removeAll { $0.id == event.id || $0.linkedRecordingID == event.id }; reports = []; save()
+            episodes.removeAll { $0.id == event.id || $0.linkedRecordingID == event.id }
+            markers.removeAll { $0.recordingID == event.id }; reports = []; save()
         } catch { self.error = l("删除音频失败：\(describe(error))") }
     }
     func erase() {
@@ -479,12 +531,13 @@ final class AppModel: ObservableObject {
         stop(); contextRefresh.cancel(); refreshingMetrics = false; player?.stop(); playingID = nil
         do {
             for event in episodes { for name in event.audioNames { try store?.deleteAudio(name) } }
-            episodes = []; reports = []; heartPoints = []; metrics = []; demoMetrics = []; save()
+            episodes = []; markers = []; lastMarkedID = nil; reports = []; heartPoints = []; metrics = []; demoMetrics = []; save()
         } catch { self.error = l("清除未完成：\(describe(error))") }
     }
     func summarize() async {
         guard !summarizing, !dayEvents.isEmpty else { return }
-        summarizing = true; defer { summarizing = false }
+        summarizing = true; summaryDay = selectedDay; summaryFailure = nil
+        defer { summarizing = false }
         let events = dayEvents; let recordings = visible; let day = selectedDay; let snapshot = revision
         do {
             let report: DailyReport
@@ -493,17 +546,18 @@ final class AppModel: ObservableObject {
             guard revision == snapshot, events.map(\.id) == Insights.events(on: day, from: visible).map(\.id), !busy else { return }
             reports.removeAll { Calendar.current.isDate($0.day, inSameDayAs: day) }
             reports.append(report); save()
-        } catch { self.error = l("端侧模型暂不可用：\(describe(error))。可使用规则摘要或稍后重试。") }
+        } catch { summaryFailure = describe(error); self.error = l("端侧模型暂不可用：\(describe(error))。可使用规则摘要或稍后重试。") }
     }
     func ruleSummary() {
-        guard !dayEvents.isEmpty else { return }
+        guard !dayEvents.isEmpty, !busy, !summarizing else { return }
+        summaryFailure = nil; summaryDay = selectedDay
         reports.removeAll { Calendar.current.isDate($0.day, inSameDayAs: selectedDay) }
         reports.append(Insights.report(day: selectedDay, events: dayEvents, language: language, recordings: visible)); save()
     }
     func loadDemo() {
         guard !busy, archiveLoaded else { return }
         stop(); contextRefresh.cancel(); refreshingMetrics = false; demoMode = true; selectedDay = Date()
-        episodes.removeAll(where: { $0.isDemo }); heartPoints.removeAll { $0.isDemo }
+        episodes.removeAll(where: { $0.isDemo }); markers.removeAll { $0.isDemo }; heartPoints.removeAll { $0.isDemo }
         demoMetrics = MetricKind.allCases.enumerated().map { index, kind in
             MetricReading(kind: kind, value: [98, 45, 35, 48, 65, 82, 3, 34.2][index], date: Date(), source: "demo")
         }
@@ -523,8 +577,11 @@ final class AppModel: ObservableObject {
             heartPoints.append(.init(sample: .init(date: date, bpm: event.trigger.bpm), baseline: 74, isDemo: true))
             episodes.append(event)
         }
+        if let owner = episodes.last(where: { $0.isDemo }) {
+            markers.append(.init(date: owner.trigger.date.addingTimeInterval(5), recordingID: owner.id, note: l("模拟人工标记：值得回顾的片刻"), isDemo: true))
+        }
         heartPoints.sort { $0.sample.date < $1.sample.date }
-        reports = []; save()
+        reports = []; summaryFailure = nil; summaryDay = nil; save()
     }
-    func exitDemo() { demoMode = false; selectedDay = Date(); reports = []; save() }
+    func exitDemo() { demoMode = false; selectedDay = Date(); reports = []; summaryFailure = nil; summaryDay = nil; save() }
 }

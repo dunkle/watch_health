@@ -47,6 +47,7 @@ public struct Episode: Codable, Identifiable, Sendable {
     public var assessment: EventAssessment?
     public var failedTranscriptionChunks: Int?
     public var recordingParts: [RecordingPart]?
+    public var transcriptionAttempted: Bool?
     /// Before language selection existed, all real recordings used zh-CN.
     public var transcriptionLanguage: AppLanguage {
         AppLanguage(rawValue: speechLanguage ?? "zh-Hans")?.resolved ?? .simplifiedChinese

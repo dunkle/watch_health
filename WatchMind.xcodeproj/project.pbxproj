@@ -13,6 +13,7 @@
 		5F9734C7ADF1F465526DD72C /* LocalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C237E4404ADF91F23429DAB4 /* LocalStore.swift */; };
 		6479D0182FBDCF1633182F0B /* WatchMindCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9C8720C7989C17BAA75FADCD /* WatchMindCore */; };
 		7E50F75E0222277BA93EDE21 /* HealthViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D7096C301D6891CDB01B128 /* HealthViews.swift */; };
+		8498EB902B46DA367BCED4BB /* JournalViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67AD3B7C5D213AACBE81AB4D /* JournalViews.swift */; };
 		921DB404AEC575861AB1BD88 /* WatchReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABEC3679A0742ADD38CE2C98 /* WatchReceiver.swift */; };
 		931F1BFA85A706ABF4B0582C /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62AC2A8AC09566E06295147 /* Views.swift */; };
 		9D1BDECECF41017025CE0FF3 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA9EC9C9CDFE6A561B89590A /* InfoPlist.strings */; };
@@ -58,6 +59,7 @@
 		18A1F2C2745719178F560105 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		1D7096C301D6891CDB01B128 /* HealthViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthViews.swift; sourceTree = "<group>"; };
 		3B0B69FFD0C77100ADEBDD72 /* RecordingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSettingsView.swift; sourceTree = "<group>"; };
+		67AD3B7C5D213AACBE81AB4D /* JournalViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalViews.swift; sourceTree = "<group>"; };
 		74DA85858CE38E58EA701C7B /* AvatarViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarViews.swift; sourceTree = "<group>"; };
 		846DF7D94289884D2E945480 /* WatchMindWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMindWatchApp.swift; sourceTree = "<group>"; };
 		9B7E1C08E5D306114294BAB2 /* WatchMind.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = WatchMind.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -107,6 +109,7 @@
 				74DA85858CE38E58EA701C7B /* AvatarViews.swift */,
 				DD838D663A9EFBA7D3927913 /* HealthSource.swift */,
 				1D7096C301D6891CDB01B128 /* HealthViews.swift */,
+				67AD3B7C5D213AACBE81AB4D /* JournalViews.swift */,
 				0174D50091A62C076B3E6C9C /* LocalIntelligence.swift */,
 				C237E4404ADF91F23429DAB4 /* LocalStore.swift */,
 				3B0B69FFD0C77100ADEBDD72 /* RecordingSettingsView.swift */,
@@ -277,6 +280,7 @@
 				C6A6A5532D559A7BCCC4F531 /* AvatarViews.swift in Sources */,
 				EABF24D8A78E1D3F4A8989E3 /* HealthSource.swift in Sources */,
 				7E50F75E0222277BA93EDE21 /* HealthViews.swift in Sources */,
+				8498EB902B46DA367BCED4BB /* JournalViews.swift in Sources */,
 				0E52EDB58528E67C5AF3A79E /* LocalIntelligence.swift in Sources */,
 				5F9734C7ADF1F465526DD72C /* LocalStore.swift in Sources */,
 				FEF5B345477010FD66A1B66E /* RecordingSettingsView.swift in Sources */,

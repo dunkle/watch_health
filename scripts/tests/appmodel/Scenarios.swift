@@ -120,6 +120,67 @@ import WatchMindCore
             model.stop()
             print("PASS: failed transcription retry preserves previously saved text")
         }
+        do {
+            let (model, audio) = await makeRecording()
+            let episodeCount = model.episodes.count
+            let ownerID = model.recordingID!
+            let first = model.markMoment()!
+            precondition(audio.starts == 1 && model.episodes.count == episodeCount)
+            precondition(model.markers.first!.recordingID == ownerID && LocalStore.archive.markers.count == 1)
+            model.updateMarker(first, note: String(repeating: "a", count: 600))
+            precondition(model.markers.first!.note.count == 500)
+            model.deleteMarker(first)
+            precondition(model.episodes.count == episodeCount && LocalStore.deletedNames.isEmpty)
+            model.setForeground(false)
+            precondition(model.markMoment() == nil, "Background must not create UI markers")
+            model.setForeground(true)
+            await notification(AVAudioSession.routeChangeNotification, [AVAudioSessionRouteChangeReasonKey: UInt(2)])
+            try? await Task.sleep(for: .milliseconds(5))
+            precondition(model.recordingPaused)
+            let gapID = model.markMoment()!
+            precondition(model.markers.first(where: { $0.id == gapID })!.audioLocation(in: model.episodes) == nil)
+            precondition(audio.starts == 2, "Marking in a pause must not open the microphone")
+            model.stopRecording(); await settle()
+            precondition(model.markMoment() == nil)
+            let restored = AppModel()
+            precondition(restored.markers.contains { $0.id == gapID })
+            model.delete(model.episodes.first!)
+            precondition(model.markers.isEmpty && LocalStore.archive.markers.isEmpty)
+            model.stop()
+            print("PASS: manual markers persist without fabricated heart events, survive restart, keep gaps and delete safely")
+        }
+        do {
+            let (model, _) = await makeRecording()
+            WatchReceiver.latest?.onConnection?(true)
+            precondition(model.watchReachable == true && model.lastWatchPacketAt != nil)
+            precondition(model.currentRecording!.recordingStage == .running)
+            precondition(model.currentRecording!.transcriptionStage == .pending)
+            model.stopRecording(); await settle()
+            precondition(model.transcriptionID == nil && model.episodes.first!.transcriptionStage == .complete)
+            model.loadDemo()
+            precondition(!model.visibleMarkers.isEmpty && model.visibleMarkers.allSatisfy(\.isDemo))
+            model.exitDemo()
+            precondition(model.visibleMarkers.isEmpty)
+            model.stop()
+            print("PASS: processing state and Watch receipt are distinct; demo manual markers stay isolated")
+        }
+        do {
+            LocalStore.archive = Archive(); LocalStore.failSave = false
+            let start = Date().addingTimeInterval(-120)
+            var owner = Episode(trigger: .init(date: start, bpm: 110, baseline: 70), status: .recording)
+            owner.captureStarted = start; owner.audioName = "interrupted.m4a"
+            owner.recordingParts = [.init(audioName: "interrupted.m4a", startedAt: start)]
+            let marker = MomentMarker(date: start.addingTimeInterval(10), recordingID: owner.id)
+            LocalStore.archive = Archive(episodes: [owner], markers: [marker])
+            let model = AppModel()
+            precondition(model.markers.first!.audioLocation(in: model.episodes) == nil)
+            await model.retry(model.episodes.first!)
+            precondition(model.markers.first!.audioLocation(in: model.episodes)?.offset == 10)
+            precondition(model.episodes.first!.recordingStage == .complete)
+            precondition(!model.busy)
+            model.stop()
+            print("PASS: retry recovers unknown audio end from measured file duration after termination")
+        }
         print("AppModel stand-in scenarios passed. Apple SDK, audio routing and device behavior are NOT validated.")
     }
 }

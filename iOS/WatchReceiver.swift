@@ -4,6 +4,7 @@ import WatchMindCore
 final class WatchReceiver: NSObject, WCSessionDelegate {
     var onSample: ((HeartSample) -> Void)?
     var onTrigger: ((Trigger) -> Void)?
+    var onConnection: ((Bool) -> Void)?
     private var language: String?
     func setLanguage(_ value: String) { language = value; syncLanguage() }
     private func syncLanguage() {
@@ -16,12 +17,16 @@ final class WatchReceiver: NSObject, WCSessionDelegate {
         WCSession.default.delegate = self; WCSession.default.activate()
     }
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        DispatchQueue.main.async { [weak self] in self?.syncLanguage() }
+        let reachable = session.isReachable
+        DispatchQueue.main.async { [weak self] in self?.onConnection?(reachable); self?.syncLanguage() }
     }
     func sessionReachabilityDidChange(_ session: WCSession) {
-        DispatchQueue.main.async { [weak self] in self?.syncLanguage() }
+        let reachable = session.isReachable
+        DispatchQueue.main.async { [weak self] in self?.onConnection?(reachable); self?.syncLanguage() }
     }
-    func sessionDidBecomeInactive(_ session: WCSession) {}
+    func sessionDidBecomeInactive(_ session: WCSession) {
+        DispatchQueue.main.async { [weak self] in self?.onConnection?(false) }
+    }
     func sessionDidDeactivate(_ session: WCSession) { session.activate() }
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) { receive(message) }
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) { receive(userInfo) }

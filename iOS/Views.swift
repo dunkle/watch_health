@@ -38,9 +38,15 @@ struct RootView: View {
                         Text(l.key(note)).font(.caption)
                     }
                     HStack {
+                        Button(l("标记此刻")) { model.markMoment() }
+                            .disabled(model.storagePaused)
                         if model.recordingPaused { Button(l("继续录音")) { model.resumeRecording() } }
                         Button(l("结束并转写")) { model.stopRecording() }
                     }.buttonStyle(.bordered).font(.subheadline.bold()).tint(.white)
+                    if let id = model.lastMarkedID, let marker = model.markers.first(where: { $0.id == id && $0.recordingID == model.recordingID }) {
+                        Text(l("已标记：\(l.date(marker.date, seconds: true))，可在记录页添加备注。"))
+                            .font(.caption).accessibilityAddTraits(.updatesFrequently)
+                    }
                 }.foregroundStyle(.white).padding().frame(maxWidth: .infinity, alignment: .leading).background(Palette.coral)
                 .accessibilityElement(children: .contain)
                 if let recording = model.currentRecording, let start = recording.captureStarted {
@@ -133,6 +139,7 @@ struct NowView: View {
             NavigationLink { HealthMetricsView() } label: {
                 Label(l("健康指标与数据时效"), systemImage: "heart.text.clipboard")
             }
+            NavigationLink(l("查看处理中心")) { ProcessingCenterView() }
             HStack(spacing: 12) {
                 metric(l("今日波动"), value: "\(today.count)", icon: "waveform.path.ecg")
                 metric(l("语音片段"), value: "\(today.filter { $0.status == .ready || $0.status == .partial }.count)", icon: "quote.bubble")
@@ -197,22 +204,7 @@ struct EpisodeCard: View {
 }
 
 struct TimelineView: View {
-    @Environment(\.locale) private var locale
-    private var l: Localizer { Localizer(locale: locale) }
-    @EnvironmentObject var model: AppModel
-    var body: some View {
-        Page {
-            DatePicker(l("选择日期"), selection: $model.selectedDay, displayedComponents: .date).datePickerStyle(.compact)
-            Text(l("每个片刻，都有上下文。")).font(.title2.weight(.medium))
-            HeartCurveView(day: model.selectedDay)
-            if model.dayEvents.isEmpty {
-                ContentUnavailableView(l("这一天还没有记录"), systemImage: "waveform", description: Text(l("未记录不代表没有情绪变化。")))
-            }
-            ForEach(model.dayEvents.reversed()) { event in
-                NavigationLink { EpisodeDetail(id: event.id) } label: { EpisodeCard(event: event) }.buttonStyle(.plain)
-            }
-        }.navigationTitle(l("今天的记录"))
-    }
+    var body: some View { HourJournalView() }
 }
 
 struct EpisodeDetail: View {
@@ -295,6 +287,15 @@ struct EpisodeDetail: View {
                         .font(.caption).foregroundStyle(Palette.muted)
                     if let owner = model.recordingOwner(event), (owner.status == .failed || owner.status == .partial), owner.audioName != nil {
                         Button(l("重试本地转写")) { Task { await model.retry(owner) } }.disabled(model.busy)
+                    }
+                }
+                let manual = model.visibleMarkers.filter { $0.recordingID == (event.linkedRecordingID ?? event.id) }
+                if !manual.isEmpty {
+                    Surface {
+                        Text(l("这段录音中的人工标记")).font(.headline)
+                        ForEach(manual.sorted { $0.date < $1.date }) { marker in
+                            NavigationLink { MarkerDetail(id: marker.id) } label: { MarkerRow(marker: marker) }
+                        }
                     }
                 }
                 if let assessment = event.assessment {
@@ -392,6 +393,7 @@ struct SettingsView: View {
                 NavigationLink(l("查看综合算法与健康指标")) { HealthMetricsView() }
             }
             Section(l("运行状态")) {
+                NavigationLink(l("查看处理中心")) { ProcessingCenterView() }
                 Label(l("端侧优先 · 无云端接口"), systemImage: "iphone.gen3.radiowaves.left.and.right")
                 Text(l("前台可触发和恢复录音。来电、锁屏或切后台时保留已录片段；系统允许且回到前台后尝试续录，否则请点击继续。进程终止后不自动开麦，可重试已存音频的转写。"))
                 Text(l("小幅触发：至少5次/分且5%；大幅标记：至少20次/分且25%。需要至少5个新鲜样本，事件冷却30秒。多指标只调整事件显著度，不诊断情绪。"))

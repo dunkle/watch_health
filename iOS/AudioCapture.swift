@@ -12,6 +12,7 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
         var text: String
         var segments: [TranscriptSegment]
         var failedChunks: Int
+        var duration: TimeInterval
     }
     private var transcriptionSlot = OperationSlot()
     private var speechTask: SFSpeechRecognitionTask?
@@ -124,7 +125,7 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
             progress(completed + failures, ranges.count)
         }
         guard completed > 0 else { throw lastError }
-        return TranscriptionResult(text: text.joined(separator: "\n"), segments: segments, failedChunks: failures)
+        return TranscriptionResult(text: text.joined(separator: "\n"), segments: segments, failedChunks: failures, duration: duration)
     }
     private func export(asset: AVURLAsset, range: Range<Double>, to url: URL) async throws {
         guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else { throw CaptureError.recording }

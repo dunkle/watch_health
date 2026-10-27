@@ -68,7 +68,6 @@ public extension Episode {
         if id == owner.id, let first = parts.first {
             return AudioLocation(audioName: first.audioName, offset: 0)
         }
-        guard let part = parts.first(where: { trigger.date >= $0.startedAt && trigger.date < ($0.endedAt ?? .distantFuture) }) else { return nil }
-        return AudioLocation(audioName: part.audioName, offset: trigger.date.timeIntervalSince(part.startedAt))
+        return RecordingTimeline.location(at: trigger.date, in: owner)
     }
 }

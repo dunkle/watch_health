@@ -67,11 +67,11 @@ class AVAudioPlayer {
         starts += 1; self.completion = completion; startDate = Date(); currentURL = url
         return startDate
     }
-    struct TranscriptionResult { var text: String; var segments: [TranscriptSegment]; var failedChunks: Int }
+    struct TranscriptionResult { var text: String; var segments: [TranscriptSegment]; var failedChunks: Int; var duration: TimeInterval }
     func transcribe(url: URL, language: AppLanguage, progress: @escaping @MainActor (Int, Int) -> Void) async throws -> TranscriptionResult {
         if failTranscription { throw CaptureError.recording }
         progress(1, 1)
-        return .init(text: "saved text", segments: [.init(text: "saved text", offset: 0, duration: 0.001)], failedChunks: 0)
+        return .init(text: "saved text", segments: [.init(text: "saved text", offset: 0, duration: 0.001)], failedChunks: 0, duration: 60)
     }
 }
 @MainActor class HealthSource {
@@ -83,6 +83,7 @@ class AVAudioPlayer {
     static var latest: WatchReceiver?
     var onSample: ((HeartSample) -> Void)?
     var onTrigger: ((Trigger) -> Void)?
+    var onConnection: ((Bool) -> Void)?
     init() { Self.latest = self }
     func setLanguage(_ value: String) {}
     func activate() {}
