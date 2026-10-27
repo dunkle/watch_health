@@ -3,81 +3,37 @@ import Charts
 import WatchMindCore
 
 private enum Palette {
-    static let background = Color(red: 0.96, green: 0.96, blue: 0.93)
-    static let ink = Color(red: 0.12, green: 0.23, blue: 0.21)
-    static let teal = Color(red: 0.20, green: 0.45, blue: 0.37)
-    static let muted = Color(red: 0.43, green: 0.48, blue: 0.44)
-    static let coral = Color(red: 0.75, green: 0.39, blue: 0.32)
+    static let background = AppTheme.canvas
+    static let ink = AppTheme.ink
+    static let teal = AppTheme.accent
+    static let muted = AppTheme.muted
+    static let coral = AppTheme.recording
 }
 
 struct RootView: View {
     @Environment(\.locale) private var locale
     private var l: Localizer { Localizer(locale: locale) }
     @EnvironmentObject var model: AppModel
+    @State private var selectedTab = 0
     var body: some View {
-        TabView {
-            NavigationStack { NowView() }.tabItem { Label(l("现在"), systemImage: "leaf") }
-            NavigationStack { TimelineView() }.tabItem { Label(l("记录"), systemImage: "waveform.path") }
-            NavigationStack { ReportView() }.tabItem { Label(l("每日摘要"), systemImage: "sparkles") }
-            NavigationStack { SettingsView() }.tabItem { Label(l("设置"), systemImage: "slider.horizontal.3") }
+        TabView(selection: $selectedTab) {
+            NavigationStack { NowView(onReview: { model.selectedDay = Date(); selectedTab = 2 }) }.tabItem { Label(l("今天"), systemImage: "leaf") }.tag(0)
+            NavigationStack { TimelineView() }.tabItem { Label(l("片刻"), systemImage: "waveform.path") }.tag(1)
+            NavigationStack { ReportView() }.tabItem { Label(l("回顾"), systemImage: "sparkles") }.tag(2)
+            NavigationStack { SettingsView() }.tabItem { Label(l("我的"), systemImage: "person.crop.circle") }.tag(3)
         }
         .tint(Palette.teal)
-        .preferredColorScheme(.light)
         .alert(l("需要留意"), isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button(l("知道了")) { model.error = nil }
         } message: { Text(model.error ?? "") }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if model.recordingID != nil {
-                VStack(alignment: .leading, spacing: 10) {
-                    Label(model.recordingPaused ? l("录音已暂停") : l("正在录音"),
-                          systemImage: model.recordingPaused ? "pause.circle.fill" : "record.circle.fill")
-                        .font(.subheadline.bold())
-                    Text(l("本次上限 \(Int((model.currentRecording?.maximumDuration ?? 3600) / 60)) 分钟，包含中断等待时间"))
-                        .font(.caption)
-                    if model.recordingPaused, let note = model.currentRecording?.note {
-                        Text(l.key(note)).font(.caption)
-                    }
-                    HStack {
-                        Button(l("标记此刻")) { model.markMoment() }
-                            .disabled(model.storagePaused)
-                        if model.recordingPaused { Button(l("继续录音")) { model.resumeRecording() } }
-                        Button(l("结束并转写")) { model.stopRecording() }
-                    }.buttonStyle(.bordered).font(.subheadline.bold()).tint(.white)
-                    if let id = model.lastMarkedID, let marker = model.markers.first(where: { $0.id == id && $0.recordingID == model.recordingID }) {
-                        Text(l("已标记：\(l.date(marker.date, seconds: true))，可在记录页添加备注。"))
-                            .font(.caption).accessibilityAddTraits(.updatesFrequently)
-                    }
-                }.foregroundStyle(.white).padding().frame(maxWidth: .infinity, alignment: .leading).background(Palette.coral)
-                .accessibilityElement(children: .contain)
-                if let recording = model.currentRecording, let start = recording.captureStarted {
-                    SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
-                        ProgressView(value: min(max(0, context.date.timeIntervalSince(start)), recording.maximumDuration ?? 3600), total: recording.maximumDuration ?? 3600)
-                            .padding(.horizontal)
-                    }
-                }
-            } else if model.busy && model.transcriptionTotal > 0 {
-                VStack {
-                    Text(l("本地分段转写：\(model.transcriptionCompleted)/\(model.transcriptionTotal)"))
-                    ProgressView(value: Double(model.transcriptionCompleted), total: Double(model.transcriptionTotal))
-                }.font(.caption).padding(10)
-            } else if model.storagePaused {
-                Text(l("设备锁定，暂缓写入；解锁后自动重试保存。"))
-                    .font(.caption).padding(10).frame(maxWidth: .infinity).background(Color.yellow.opacity(0.25))
-            } else if model.demoMode {
-                HStack { Text(l("演示模式 · 全部为模拟数据")); Spacer(); Button(l("退出")) { model.exitDemo() } }
-                    .font(.caption).padding(10).background(Color.yellow.opacity(0.25))
-            }
-        }
+        .safeAreaInset(edge: .top, spacing: 0) { SessionStatusBar() }
+        .sensoryFeedback(.success, trigger: model.lastMarkedID) { _, value in value != nil }
     }
 }
 
 private struct Surface<Content: View>: View {
     @ViewBuilder var content: Content
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) { content }
-            .padding(22).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white, in: RoundedRectangle(cornerRadius: 26))
-    }
+    var body: some View { AppCard { content } }
 }
 
 private struct Page<Content: View>: View {
@@ -93,74 +49,9 @@ struct NowView: View {
     private var l: Localizer { Localizer(locale: locale) }
     @EnvironmentObject var model: AppModel
     @State private var showConsent = false
-    private var today: [Episode] { Insights.events(on: Date(), from: model.visible) }
+    var onReview: () -> Void = {}
     var body: some View {
-        Page {
-            HStack {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(Date(), format: .dateTime.month().day().weekday()).font(.caption).foregroundStyle(Palette.muted)
-                    Text(l("听见此刻的自己")).font(.largeTitle.bold())
-                }
-                Spacer(); Image(systemName: "leaf.circle.fill").font(.system(size: 42)).foregroundStyle(Palette.teal)
-            }
-            CompanionView()
-            NavigationLink(l("健康趋势与日常安排")) { HealthOverviewView() }
-            NavigationLink(l("高光与本地搜索")) { JournalLibraryView() }
-            Surface {
-                HStack {
-                    Label(model.observing ? l("观察已开启") : l("留一点空间给自己"), systemImage: model.observing ? "dot.radiowaves.left.and.right" : "sun.horizon")
-                        .font(.subheadline.weight(.medium))
-                    Spacer(); Circle().fill(model.observing ? Palette.teal : .gray.opacity(0.4)).frame(width: 8, height: 8)
-                }
-                if let bpm = model.latestBPM, let time = model.latestSampleAt, abs(time.timeIntervalSinceNow) < 60 {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("\(Int(bpm))").font(.system(size: 64, weight: .light, design: .rounded))
-                        Text(l("次/分")).foregroundStyle(Palette.muted)
-                        Spacer(); Image(systemName: "heart.fill").foregroundStyle(Palette.coral).font(.title)
-                    }
-                    Text(l("最近样本：\(l.date(time, seconds: true))，非连续实时保证")).font(.caption).foregroundStyle(Palette.muted)
-                } else {
-                    Text(l("身体的变化，\n值得被温柔地记录。")).font(.title2.weight(.medium)).lineSpacing(6)
-                    Text(l("开启后等待新鲜心率数据，波动时记录一小段语音。没有数据时不推断你的心情。"))
-                        .font(.subheadline).foregroundStyle(Palette.muted)
-                }
-                if model.observing {
-                    Button { model.stop() } label: { Label(l("结束观察"), systemImage: "pause.fill").frame(maxWidth: .infinity).padding(6) }
-                        .buttonStyle(.borderedProminent).disabled(model.consenting)
-                    Text(model.foreground ? l("前台可触发录音 · 手机需在你附近") : l("后台仅记事件，不自动开启麦克风"))
-                        .font(.caption).foregroundStyle(Palette.muted)
-                } else {
-                    Button { showConsent = true } label: {
-                        Label(model.consenting ? l("正在请求权限…") : l("开启观察"), systemImage: "waveform")
-                            .frame(maxWidth: .infinity).padding(6)
-                    }.buttonStyle(.borderedProminent).disabled(model.demoMode || model.busy || model.consenting)
-                    Text(l("只在你开启的会话中触发 · 不预先监听")).font(.caption).foregroundStyle(Palette.muted)
-                }
-            }
-            HeartCurveView(day: Date())
-            NavigationLink { HealthMetricsView() } label: {
-                Label(l("健康指标与数据时效"), systemImage: "heart.text.clipboard")
-            }
-            NavigationLink(l("查看处理中心")) { ProcessingCenterView() }
-            HStack(spacing: 12) {
-                metric(l("今日波动"), value: "\(today.count)", icon: "waveform.path.ecg")
-                metric(l("语音片段"), value: "\(today.filter { $0.status == .ready || $0.status == .partial }.count)", icon: "quote.bubble")
-                metric(l("感受确认"), value: "\(today.filter { $0.feeling != nil }.count)", icon: "face.smiling")
-            }
-            HStack { Text(l("最近的片刻")).font(.title3.bold()); Spacer(); Text(l("保存在本机")).font(.caption).foregroundStyle(Palette.muted) }
-            if let event = model.visible.sorted(by: { $0.trigger.date > $1.trigger.date }).first {
-                NavigationLink { EpisodeDetail(id: event.id) } label: { EpisodeCard(event: event) }.buttonStyle(.plain)
-            } else {
-                Surface {
-                    Label(l("你的故事还未开始"), systemImage: "text.bubble")
-                    Text(l("记录会出现在这里。先体验界面，也可以直接开启真实观察。"))
-                        .font(.subheadline).foregroundStyle(Palette.muted)
-                    Button(l("查看模拟记录")) { model.loadDemo() }.disabled(model.busy)
-                }
-            }
-            Label(l("心率波动只是线索，不代表情绪变化或健康诊断。"), systemImage: "info.circle")
-                .font(.caption).foregroundStyle(Palette.muted)
-        }
+        Page { DashboardContent(onStart: { showConsent = true }, onReview: onReview) }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showConsent) {
             NavigationStack {
@@ -178,31 +69,51 @@ struct NowView: View {
             }
         }
     }
-    private func metric(_ title: String, value: String, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: icon).foregroundStyle(Palette.teal)
-            Text(value).font(.title.bold()); Text(title).font(.caption).foregroundStyle(Palette.muted)
-        }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 20))
-    }
+
 }
 
 struct EpisodeCard: View {
     @Environment(\.locale) private var locale
+    @EnvironmentObject private var model: AppModel
     private var l: Localizer { Localizer(locale: locale) }
     let event: Episode
-    var body: some View {
-        Surface {
-            HStack {
-                Label(l.date(event.trigger.date), systemImage: "heart.text.square")
-                Spacer(); Text(l("\(Int(event.trigger.bpm)) 次/分")).foregroundStyle(Palette.coral)
-            }.font(.subheadline.weight(.medium))
-            Text(event.transcript.isEmpty ? l.key(event.note) : event.transcript).font(.body).lineLimit(3).multilineTextAlignment(.leading)
-            HStack {
-                Text(event.feeling.map { l("本人确认 · \(l.key($0))") } ?? l("感受尚未确认"))
-                Spacer(); Image(systemName: "arrow.up.right")
-            }.font(.caption).foregroundStyle(Palette.muted)
+    private var excerpt: String { Insights.voiceContext(for: event, events: model.visible) }
+    private var statusText: String {
+        switch event.status {
+        case .recording: return l("正在录音")
+        case .paused: return l("录音已暂停")
+        case .transcribing: return l("正在本机整理")
+        case .failed, .partial, .deferred: return l("待核对")
+        case .missed: return l("没有对应声音")
+        case .linked: return l("关联片刻")
+        case .ready: return event.audioPurgedAt == nil ? l("文字已就绪") : l("文字保留")
         }
     }
+    var body: some View {
+        Surface {
+            ViewThatFits(in: .horizontal) {
+                HStack { time; Spacer(); StatusPill(text: statusText, icon: "waveform") }
+                VStack(alignment: .leading, spacing: 8) { time; StatusPill(text: statusText, icon: "waveform") }
+            }
+            Text(excerpt.isEmpty ? l.key(event.note) : "“" + excerpt + "”")
+                .font(excerpt.isEmpty ? .body : .title3.weight(.medium)).lineLimit(4)
+                .foregroundStyle(excerpt.isEmpty ? Palette.muted : Palette.ink).multilineTextAlignment(.leading)
+            HStack(spacing: 6) {
+                Image(systemName: "heart").foregroundStyle(Palette.coral)
+                Text(l("\(Int(event.trigger.baseline)) → \(Int(event.trigger.bpm)) 次/分")).monospacedDigit()
+            }.font(.caption).foregroundStyle(Palette.muted)
+            Divider().overlay(AppTheme.border)
+            ViewThatFits(in: .horizontal) {
+                HStack { feeling; Spacer(); source }
+                VStack(alignment: .leading, spacing: 8) { feeling; source }
+            }
+        }
+    }
+    private var time: some View { Label(l.date(event.trigger.date), systemImage: "clock").font(.caption.weight(.semibold)).foregroundStyle(Palette.muted) }
+    private var feeling: some View {
+        Text(event.feeling.map { l("本人确认 · \(l.key($0))") } ?? l("感受尚未确认")).font(.caption).foregroundStyle(Palette.muted)
+    }
+    private var source: some View { Label(l("回到原话核对"), systemImage: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal) }
 }
 
 struct TimelineView: View {
@@ -347,45 +258,54 @@ struct ReportView: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         Page {
-            HStack { AvatarView(configuration: model.avatar, size: 62); Text(l("和你一起回顾今天")).font(.headline) }
+            SectionHeading(title: l("把片刻，串成今天。"), detail: l("事实有出处，感受由本人补充。"))
             DatePicker(l("摘要日期"), selection: $model.selectedDay, displayedComponents: .date)
-            CoverageView()
-            NavigationLink(l("片段回顾与反思")) { ReflectionView() }
-            NavigationLink(l("高光与本地搜索")) { JournalLibraryView() }
             Surface {
-                Image(systemName: "sparkles").font(.largeTitle).foregroundStyle(Palette.teal)
-                Text(l("把零散的片刻，\n整理成一天的故事。")).font(.title2.weight(.medium)).lineSpacing(5)
-                Text(l("使用当天事件、人工标记与确认高光。端侧模型可参考启用的历史记忆，规则摘要只整理当天证据；不切换云端，不补造未采集经历。"))
-                    .font(.subheadline).foregroundStyle(Palette.muted)
+                HStack {
+                    StatusPill(text: model.report == nil ? l("等待整理") : l("回顾已就绪"), icon: "sparkles")
+                    Spacer()
+                    if model.summarizing { ProgressView() }
+                }
+                Text(model.summaryEvidenceIDs.isEmpty ? l("先留下一点真实片段。") : l("有 \(model.summaryEvidenceIDs.count) 条依据，可整理成回顾。"))
+                    .font(.headline)
                 Button { Task { await model.summarize() } } label: {
-                    HStack { if model.summarizing { ProgressView() }; Text(model.summarizing ? l("正在本地整理…") : l("生成每日摘要")) }.frame(maxWidth: .infinity).padding(6)
-                }.buttonStyle(.borderedProminent).disabled(model.summaryEvidenceIDs.isEmpty || model.summarizing || model.busy)
-                Button(l("使用规则摘要")) { model.ruleSummary() }.disabled(model.summaryEvidenceIDs.isEmpty || model.summarizing || model.busy)
+                    Text(model.summarizing ? l("正在本地整理…") : model.report == nil ? l("整理这一天") : l("重新整理回顾"))
+                }.buttonStyle(PrimaryActionStyle()).disabled(model.summaryEvidenceIDs.isEmpty || model.summarizing || model.busy)
+                Button(l("使用规则摘要")) { model.ruleSummary() }.font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+                    .disabled(model.summaryEvidenceIDs.isEmpty || model.summarizing || model.busy)
+                Text(l("支持时使用端侧模型，否则提供规则整理。只回顾实际片段，未知不补造。"))
+                    .font(.caption).foregroundStyle(Palette.muted)
             }
             if let report = model.report {
                 Surface {
-                    Text(l.key(report.engine)).font(.caption.bold()).foregroundStyle(Palette.teal)
-                    Text(report.text).lineSpacing(7).textSelection(.enabled)
+                    SectionHeading(title: l("这一天，值得回看的内容"))
+                    Text(report.text).font(.body).lineSpacing(7).textSelection(.enabled)
                     Divider()
+                    Text(l.key(report.engine)).font(.caption.weight(.medium)).foregroundStyle(Palette.teal)
                     Text(l("基于 \((report.evidenceIDs ?? report.episodeIDs).count) 条记录 · \(l.date(report.generatedAt)) 生成"))
                         .font(.caption).foregroundStyle(Palette.muted)
-                    ForEach(model.visibleMarkers.filter { Calendar.current.isDate($0.date, inSameDayAs: model.selectedDay) }) { marker in
-                        NavigationLink(l("人工标记")) { MarkerDetail(id: marker.id) }.font(.caption)
-                    }
-                    ForEach(model.visibleClips.filter { $0.confirmed && Calendar.current.isDate($0.date, inSameDayAs: model.selectedDay) }) { clip in
-                        NavigationLink(l("本人确认的高光")) { ClipDetailView(id: clip.id) }.font(.caption)
-                    }
-                    ForEach(model.dayEvents) { event in
-                        NavigationLink { EpisodeDetail(id: event.id) } label: {
-                            Text(l("\(l.date(event.trigger.date)) · \(event.id.uuidString.prefix(8)) · 核对依据"))
-                        }.font(.caption)
-                    }
+                    DisclosureGroup(l("查看这份回顾的依据")) {
+                        ForEach(model.visibleMarkers.filter { Calendar.current.isDate($0.date, inSameDayAs: model.selectedDay) }) { marker in
+                            NavigationLink { MarkerDetail(id: marker.id) } label: { Label(l("人工标记 · \(l.date(marker.date))"), systemImage: "bookmark") }.frame(minHeight: 44)
+                        }
+                        ForEach(model.visibleClips.filter { $0.confirmed && Calendar.current.isDate($0.date, inSameDayAs: model.selectedDay) }) { clip in
+                            NavigationLink { ClipDetailView(id: clip.id) } label: { Label(l("本人确认的高光"), systemImage: "quote.bubble") }.frame(minHeight: 44)
+                        }
+                        ForEach(model.dayEvents) { event in
+                            NavigationLink { EpisodeDetail(id: event.id) } label: { Label(l("\(l.date(event.trigger.date)) · 核对原话"), systemImage: "waveform.path.ecg") }.frame(minHeight: 44)
+                        }
+                    }.font(.subheadline)
                 }
-            } else {
-                Text(model.summaryEvidenceIDs.isEmpty ? l("先留下一个片刻，再生成摘要。") : l("尚无当前证据的摘要，或记录已变化，请重新生成。"))
-                    .foregroundStyle(Palette.muted).font(.subheadline)
             }
-        }.navigationTitle(l("每日回顾"))
+            NavigationLink { ReflectionView() } label: {
+                FeatureRoute(title: l("留一句自己的感受"), detail: l("补充、纠正，或暂时跳过，都可以"), icon: "square.and.pencil")
+            }.buttonStyle(.plain)
+            DisclosureGroup(l("查看采集覆盖与缺口")) { CoverageView() }.font(.subheadline).padding(.vertical, 8)
+            if model.report == nil {
+                Text(model.summaryEvidenceIDs.isEmpty ? l("没有记录，不代表没有经历或感受。") : l("依据变化后，请重新整理回顾。"))
+                    .font(.caption).foregroundStyle(Palette.muted)
+            }
+        }.navigationTitle(l("回顾"))
     }
 }
 
@@ -396,6 +316,11 @@ struct SettingsView: View {
     @State private var erase = false
     var body: some View {
         List {
+            Section(l("我的虚拟形象")) {
+                NavigationLink { AvatarSettingsView() } label: {
+                    HStack { AvatarView(configuration: model.avatar, size: 54); Text(model.avatar.name.isEmpty ? l("定制我的形象") : model.avatar.name) }
+                }
+            }
             Section(l("语言 / Language")) {
                 Picker(l("应用与语音语言"), selection: $model.language) {
                     Text(l("跟随系统")).tag(AppLanguage.system)
@@ -404,11 +329,6 @@ struct SettingsView: View {
                 }.disabled(model.busy || model.summarizing || model.consenting)
                 Text(l("切换界面和新录音的转写语言；旧录音重试保留原语言，旧摘要需重新生成。"))
                     .font(.caption)
-            }
-            Section(l("我的虚拟形象")) {
-                NavigationLink { AvatarSettingsView() } label: {
-                    HStack { AvatarView(configuration: model.avatar, size: 54); Text(model.avatar.name.isEmpty ? l("定制我的形象") : model.avatar.name) }
-                }
             }
             Section(l("记录与回顾")) {
                 NavigationLink(l("高光与本地搜索")) { JournalLibraryView() }

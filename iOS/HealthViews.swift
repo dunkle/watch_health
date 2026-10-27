@@ -59,7 +59,7 @@ struct HeartCurveView: View {
             }
             Text(l("曲线保留近7天、最多60000点；采样间隔超过90秒会断开，不表示连续监测。"))
                 .font(.caption2).foregroundStyle(.secondary)
-        }.padding(18).background(.white, in: RoundedRectangle(cornerRadius: 22))
+        }.padding(18).background(AppTheme.surface, in: RoundedRectangle(cornerRadius: AppTheme.radius))
             .navigationDestination(item: $selectedMarker) { id in EpisodeDetail(id: id) }
     }
 }
@@ -143,6 +143,6 @@ struct AssessmentView: View {
             ForEach(assessment.readings) { reading in MetricRow(kind: reading.kind, reading: reading, at: at) }
             Text(l("缺失或过期：\(assessment.unavailable.map { l.key($0.title) }.joined(separator: l("、")))"))
                 .font(.caption).foregroundStyle(.secondary)
-        }.padding(20).background(.white, in: RoundedRectangle(cornerRadius: 22))
+        }.padding(20).background(AppTheme.surface, in: RoundedRectangle(cornerRadius: AppTheme.radius))
     }
 }

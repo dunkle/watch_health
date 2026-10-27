@@ -16,7 +16,7 @@ struct CoverageView: View {
                 .font(.caption).foregroundStyle(.secondary)
             Text(l("这些是实际片段的时间覆盖，不代表全天经历、情绪准确率或说话时长。心率未触发和录音空档仍是未知。"))
                 .font(.caption).foregroundStyle(.secondary)
-        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 20))
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 20))
     }
 }
 struct ReflectionView: View {
@@ -106,7 +106,7 @@ struct HealthOverviewView: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 12), spacing: 4) {
                     ForEach(blocks) { block in
                         Button { chosenBlock = block.start } label: {
-                            RoundedRectangle(cornerRadius: 3).fill(block.signal == .activity ? Color.orange : block.signal == .heart ? Color.teal : Color.gray.opacity(0.2))
+                            RoundedRectangle(cornerRadius: 3).fill(block.signal == .activity ? Color.orange : block.signal == .heart ? Color.teal : Color(uiColor: .tertiarySystemFill))
                                 .frame(height: 16).overlay { if chosenBlock == block.start { RoundedRectangle(cornerRadius: 3).stroke(.primary, lineWidth: 2) } }
                         }.buttonStyle(.plain).accessibilityLabel(l("\(l.date(block.start))，\(block.sampleCount) 个心率点"))
                     }

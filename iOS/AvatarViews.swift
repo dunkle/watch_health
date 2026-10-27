@@ -120,6 +120,6 @@ struct CompanionView: View {
                 NavigationLink(l("定制我的形象")) { AvatarSettingsView() }.font(.caption.bold())
             }
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white, in: RoundedRectangle(cornerRadius: 26))
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: AppTheme.radius))
     }
 }

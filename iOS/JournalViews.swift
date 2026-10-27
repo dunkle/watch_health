@@ -2,17 +2,26 @@ import SwiftUI
 import WatchMindCore
 
 struct MarkerRow: View {
+    @EnvironmentObject private var model: AppModel
     @Environment(\.locale) private var locale
     private var l: Localizer { Localizer(locale: locale) }
     let marker: MomentMarker
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(l("人工标记 · \(l.date(marker.date, seconds: true))"), systemImage: "bookmark.fill").font(.subheadline.bold())
-            Text(marker.note.isEmpty ? l("值得回顾的片刻") : marker.note).lineLimit(3)
-            Text(l("由你主动标记，不代表心率或情绪判断。")).font(.caption).foregroundStyle(.secondary)
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
-            .background(.white, in: RoundedRectangle(cornerRadius: 22))
+    private var excerpt: String {
+        marker.note.isEmpty ? marker.context(in: model.visible).map(\.text).joined(separator: " ") : marker.note
     }
+    var body: some View {
+        AppCard {
+            ViewThatFits(in: .horizontal) {
+                HStack { StatusPill(text: l("主动标记"), icon: "bookmark.fill"); Spacer(); time }
+                VStack(alignment: .leading, spacing: 8) { StatusPill(text: l("主动标记"), icon: "bookmark.fill"); time }
+            }
+            Text(excerpt.isEmpty ? l("你为这个时刻留了一个位置。") : excerpt)
+                .font(excerpt.isEmpty ? .body : .title3.weight(.medium)).foregroundStyle(AppTheme.ink)
+                .lineLimit(4).multilineTextAlignment(.leading)
+            Label(l("查看这个时刻"), systemImage: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.accent)
+        }
+    }
+    private var time: some View { Text(l.date(marker.date, seconds: true)).font(.caption).foregroundStyle(AppTheme.muted) }
 }
 
 struct MarkerDetail: View {
@@ -75,11 +84,15 @@ struct MarkerDetail: View {
 struct HourJournalView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.locale) private var locale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var selectedHour: Date?
     private var l: Localizer { Localizer(locale: locale) }
     private var hours: [HourBucket] { model.hourBuckets.filter { !$0.isEmpty } }
     private func label(_ date: Date) -> String {
         let formatter = DateFormatter(); formatter.locale = l.locale; formatter.timeZone = .current
-        formatter.dateFormat = "HH:mm XXX" // Offsets distinguish the repeated hour when DST ends.
+        let hour = Calendar.current.component(.hour, from: date)
+        let repeated = model.hourBuckets.filter { Calendar.current.component(.hour, from: $0.start) == hour }.count > 1
+        formatter.dateFormat = repeated ? "HH:mm XXX" : "HH:mm" // Offsets appear only where an hour is ambiguous.
         return formatter.string(from: date)
     }
     private struct Row: Identifiable {
@@ -98,18 +111,28 @@ struct HourJournalView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     DatePicker(l("选择日期"), selection: $model.selectedDay, displayedComponents: .date).datePickerStyle(.compact)
-                    Text(l("按小时找回每个片刻")).font(.title2.bold())
-                    HeartCurveView(day: model.selectedDay)
-                    NavigationLink(l("查看处理中心")) { ProcessingCenterView() }
-                    NavigationLink(l("高光与本地搜索")) { JournalLibraryView() }
+                    SectionHeading(title: l("每个片刻，都有依据。"), detail: l("按时间找回原话，也看见没有录到的空白。"))
+                    NavigationLink { JournalLibraryView() } label: {
+                        FeatureRoute(title: l("搜索原话与高光"), detail: l("从一句话，回到那段生活"), icon: "text.magnifyingglass")
+                    }.buttonStyle(.plain)
+                    DisclosureGroup(l("心率与片刻的时间线")) { HeartCurveView(day: model.selectedDay) }
+                        .font(.subheadline.weight(.semibold)).padding(.vertical, 6)
+                    NavigationLink(l("查看处理中心")) { ProcessingCenterView() }.font(.caption).frame(minHeight: 44)
                     if hours.isEmpty {
                         ContentUnavailableView(l("这一天还没有记录"), systemImage: "waveform", description: Text(l("未记录不代表没有情绪变化。")))
                     } else {
                         ScrollView(.horizontal) {
                             HStack {
                                 ForEach(hours) { hour in
-                                    Button(label(hour.start)) { withAnimation { proxy.scrollTo(hour.id, anchor: .top) } }
-                                        .buttonStyle(.bordered)
+                                    Button {
+                                        selectedHour = hour.id
+                                        if reduceMotion { proxy.scrollTo(hour.id, anchor: .top) }
+                                        else { withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(hour.id, anchor: .top) } }
+                                    } label: {
+                                        Text(label(hour.start)).font(.subheadline.weight(.semibold)).padding(.horizontal, 15).frame(minHeight: 44)
+                                            .foregroundStyle(selectedHour == hour.id ? Color.white : AppTheme.accent)
+                                            .background(selectedHour == hour.id ? AppTheme.buttonFill : AppTheme.raised, in: Capsule())
+                                    }.buttonStyle(.plain).accessibilityAddTraits(selectedHour == hour.id ? [.isSelected] : [])
                                 }
                             }
                         }
@@ -130,14 +153,14 @@ struct HourJournalView: View {
                                 NavigationLink { EpisodeDetail(id: owner.id) } label: {
                                     Label(l("本小时仍有录音 · 开始于 \(l.date(owner.captureStarted ?? owner.trigger.date, includeDate: true))"), systemImage: "arrow.turn.down.right")
                                         .font(.subheadline).padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                                        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                                 }
                             }
                         }.id(hour.id)
                     }
                 }.padding(20)
-            }.background(Color(red: 0.96, green: 0.96, blue: 0.93))
-        }.navigationTitle(l("今天的记录"))
+            }.background(AppTheme.canvas)
+        }.navigationTitle(l("片刻"))
     }
 }
 

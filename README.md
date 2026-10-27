@@ -6,8 +6,10 @@
 
 ## 先看 UI
 
-- [界面设计图](docs/UI-preview.png)（v0.3 视觉参考，未覆盖新版人物、曲线和续录界面）
-- [可交互设计预览 HTML](docs/ui-preview.html)：下载后用浏览器打开，全部为模拟数据，不录音、不连接传感器。原生运行效果需通过 Xcode 验收。
+- [v0.8 浅色首页设计图](docs/UI-v08-today.png)、[深色英文设计图](docs/UI-v08-dark.png)：模拟视觉参考，非原生截图。
+- [v0.8 可交互设计预览](docs/ui-preview-v08.html)：下载后直接用浏览器打开；可切主题、语言、大字号和四页，所有内容均为模拟，不录音、不读取传感器。
+- [产品卖点、视觉与布局改版说明](docs/PRODUCT_DESIGN_v0.8.md)。原生新增「今天 / 片刻 / 回顾 / 我的」信息层级与系统深色主题，Mac / 真机待验收。
+- [旧v0.3 HTML参考](docs/ui-preview.html)保留历史，不代表当前界面。
 
 ## 当前实现
 
@@ -70,7 +72,7 @@ Linux x86_64 云环境可运行 `./scripts/setup-linux.sh` 安装经签名验证
 - [可穿戴健康产品综合分析与本版实现](docs/WEARABLE_INTEGRATION.md)
 - [Soundiary专项分析：声音筛选、音频保留、覆盖与省电](docs/SOUNDIARY_INTEGRATION.md)
 - [Auday / 时录 / Soundiary调研与融合方案（含引用证据和待实现规划）](docs/COMPETITOR_RESEARCH.md)
-- [完整功能文档（v0.7，持续维护）](docs/FUNCTIONAL_SPEC.md)
+- [完整功能文档（v0.8，持续维护）](docs/FUNCTIONAL_SPEC.md)
 - [v0.4 历史规格：长录音、曲线与多指标](docs/PRD_v0.4_MultiSignal.md)
 - [v0.3 初版目标：心率与语音](docs/PRD_v0.3_Heart_Voice.md)
 - [v0.2 长期产品 PRD](docs/WatchMind_PRD_v0.2.md)
