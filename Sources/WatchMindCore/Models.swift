@@ -27,7 +27,7 @@ public struct TranscriptSegment: Codable, Equatable, Sendable {
 }
 
 public enum CaptureStatus: String, Codable, Sendable {
-    case missed, recording, transcribing, ready, failed, linked, partial
+    case missed, recording, paused, transcribing, ready, failed, linked, partial
 }
 
 public struct Episode: Codable, Identifiable, Sendable {
@@ -46,6 +46,7 @@ public struct Episode: Codable, Identifiable, Sendable {
     public var linkedRecordingID: UUID?
     public var assessment: EventAssessment?
     public var failedTranscriptionChunks: Int?
+    public var recordingParts: [RecordingPart]?
     /// Before language selection existed, all real recordings used zh-CN.
     public var transcriptionLanguage: AppLanguage {
         AppLanguage(rawValue: speechLanguage ?? "zh-Hans")?.resolved ?? .simplifiedChinese

@@ -5,7 +5,8 @@ import WatchMindCore
 @MainActor
 final class AudioCapture: NSObject, AVAudioRecorderDelegate {
     private var recorder: AVAudioRecorder?
-    private var finished: ((Result<URL, Error>) -> Void)?
+    struct CapturedAudio { var url: URL; var duration: TimeInterval }
+    private var finished: ((Result<CapturedAudio, Error>) -> Void)?
     private var url: URL?
     struct TranscriptionResult {
         var text: String
@@ -27,7 +28,7 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
             case .permission: return l("请在系统设置允许麦克风和语音识别。")
             case .unavailable: return l("当前设备或语言不支持本地转写。不会上传到云端；可保留音频后重试。")
             case .recording: return l("录音未成功完成，请检查音频设备。")
-            case .interrupted: return l("录音被系统中断，已结束任务；保留的片段可手动重试转写。")
+            case .interrupted: return l("录音被系统中断，已保留片段；可继续录音或结束并转写。")
             case .busy: return l("已有录音或转写任务，请稍后重试。")
             case .timeout: return l("本地转写超时，可稍后重试。")
             }
@@ -39,11 +40,11 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
         return await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0 == .authorized) } }
     }
     @discardableResult
-    func start(url: URL, maximumDuration: TimeInterval, completion: @escaping (Result<URL, Error>) -> Void) throws -> Date {
+    func start(url: URL, maximumDuration: TimeInterval, completion: @escaping (Result<CapturedAudio, Error>) -> Void) throws -> Date {
         guard recorder == nil, speechSlot.current == nil, transcriptionSlot.current == nil else { throw CaptureError.busy }
         let audio = AVAudioSession.sharedInstance()
         do {
-            try audio.setCategory(.record, mode: .measurement, options: [])
+            try audio.setCategory(.playAndRecord, mode: .measurement, options: [.mixWithOthers, .defaultToSpeaker])
             try audio.setActive(true)
             let r = try AVAudioRecorder(url: url, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC,
                  AVSampleRateKey: 44100, AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64000, AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue])
@@ -51,7 +52,7 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
             recorder = r; self.url = url; finished = completion
             guard r.prepareToRecord() else { throw CaptureError.recording }
             let startedAt = Date()
-            guard r.record(forDuration: min(180 * 60, max(60, maximumDuration))) else { throw CaptureError.recording }
+            guard r.record(forDuration: min(86400, max(0.1, maximumDuration))) else { throw CaptureError.recording }
             return startedAt
         } catch {
             recorder?.delegate = nil; recorder?.stop()
@@ -62,13 +63,11 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
     }
     func stop() {
         guard let recorder else { return }
-        recorder.stop()
         // Never depend on a delegate callback to release the application lock.
         completeRecording(recorder, error: nil)
     }
     func interrupt() {
         guard let recorder else { return }
-        recorder.stop()
         completeRecording(recorder, error: CaptureError.interrupted)
     }
     nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
@@ -79,10 +78,18 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
     }
     private func completeRecording(_ sender: AVAudioRecorder, error: Error?) {
         guard recorder === sender, let completion = finished, let url else { return }
+        let recordedTime = sender.currentTime
         sender.delegate = nil; sender.stop()
         finished = nil; recorder = nil; self.url = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        if let error { completion(.failure(error)) } else { completion(.success(url)) }
+        if let error { completion(.failure(error)) }
+        else {
+            // Read the finalized file, not elapsed wall time (the delegate can be delayed).
+            let file = try? AVAudioFile(forReading: url)
+            let measured = file.map { Double($0.length) / $0.processingFormat.sampleRate } ?? recordedTime
+            let duration = measured.isFinite ? max(0, measured) : 0
+            completion(.success(CapturedAudio(url: url, duration: duration)))
+        }
     }
     func transcribe(url: URL, language: AppLanguage,
                     progress: @escaping @MainActor (Int, Int) -> Void) async throws -> TranscriptionResult {

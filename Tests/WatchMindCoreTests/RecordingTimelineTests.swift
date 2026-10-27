@@ -6,7 +6,11 @@ final class RecordingTimelineTests: XCTestCase {
     func testHourDefaultBoundsAndChunkCoverage() {
         XCTAssertEqual(RecordingPolicy.duration(minutes: RecordingPolicy.defaultMinutes), 3600)
         XCTAssertEqual(RecordingPolicy.minutes(0), 1)
-        XCTAssertEqual(RecordingPolicy.minutes(1000), 180)
+        XCTAssertEqual(RecordingPolicy.minutes(1000), 1000)
+        XCTAssertEqual(RecordingPolicy.minutes(2000), 1440)
+        XCTAssertEqual(RecordingPolicy.duration(minutes: 1440), 86400)
+        XCTAssertEqual(RecordingPolicy.chunks(duration: 86400).count, 1920)
+        XCTAssertTrue(RecordingPolicy.chunks(duration: 86402).isEmpty)
         let chunks = RecordingPolicy.chunks(duration: 3600)
         XCTAssertEqual(chunks.count, 80)
         XCTAssertEqual(chunks.first?.lowerBound, 0)

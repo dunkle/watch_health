@@ -2,10 +2,11 @@ import Foundation
 
 public enum RecordingPolicy {
     public static let defaultMinutes = 60
-    public static func minutes(_ value: Int) -> Int { min(180, max(1, value)) }
+    public static let maximumMinutes = 24 * 60
+    public static func minutes(_ value: Int) -> Int { min(maximumMinutes, max(1, value)) }
     public static func duration(minutes: Int) -> TimeInterval { Double(self.minutes(minutes)) * 60 }
     public static func chunks(duration: TimeInterval, length: TimeInterval = 45) -> [Range<Double>] {
-        guard duration.isFinite, duration > 0, duration <= 180 * 60 + 1, length.isFinite, length > 0 else { return [] }
+        guard duration.isFinite, duration > 0, duration <= Double(maximumMinutes * 60) + 1, length.isFinite, length > 0 else { return [] }
         return stride(from: 0.0, to: duration, by: length).map { $0..<min($0 + length, duration) }
     }
 }

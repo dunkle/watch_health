@@ -11,6 +11,18 @@ final class AppModel: ObservableObject {
             revision += 1
         }
     }
+    @Published var avatar: AvatarConfiguration = {
+        guard let data = UserDefaults.standard.data(forKey: "avatarConfiguration"),
+              let value = try? JSONDecoder().decode(AvatarConfiguration.self, from: data) else { return AvatarConfiguration() }
+        return value
+    }() {
+        didSet { if let data = try? JSONEncoder().encode(avatar) { UserDefaults.standard.set(data, forKey: "avatarConfiguration") } }
+    }
+    @Published private(set) var recovery: RecordingRecovery?
+    var recordingPaused: Bool { recovery?.phase == .paused }
+    private var activePartID: UUID?
+    private var recordingDeadline: Task<Void, Never>?
+    private var systemAudioInterrupted = false
     private var l: Localizer { Localizer(language: language) }
     private func describe(_ error: Error) -> String {
         (error as? AudioCapture.CaptureError)?.message(language: language) ?? l.key(error.localizedDescription)
@@ -82,19 +94,40 @@ final class AppModel: ObservableObject {
         receiver.onTrigger = { [weak self] trigger in self?.accept(trigger) }
         receiver.setLanguage(language.rawValue)
         receiver.activate()
-        notificationTokens.append(NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] notification in
-            guard let type = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-                  type == AVAudioSession.InterruptionType.began.rawValue else { return }
-            Task { @MainActor in self?.audio.interrupt() }
+        notificationTokens.append(NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: nil) { [weak self] notification in
+            guard let type = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt else { return }
+            let options = (notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0
+            Task { @MainActor in
+                guard let self else { return }
+                if type == AVAudioSession.InterruptionType.began.rawValue {
+                    self.systemAudioInterrupted = true
+                    self.pauseRecording(note: "系统音频中断，已保留片段；等待恢复。", automatic: false)
+                } else if type == AVAudioSession.InterruptionType.ended.rawValue {
+                    self.systemAudioInterrupted = false
+                    self.recovery?.allowAutomaticResume(AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume))
+                    self.resumeRecording(automatic: true)
+                }
+            }
         })
-        notificationTokens.append(NotificationCenter.default.addObserver(forName: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.storagePaused = true; self?.audio.interrupt() }
+        notificationTokens.append(NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: nil) { [weak self] notification in
+            let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            guard reason == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue else { return }
+            Task { @MainActor in self?.pauseRecording(note: "音频设备已断开，请确认环境后点击继续录音。", automatic: false, manualOnly: true) }
         })
-        notificationTokens.append(NotificationCenter.default.addObserver(forName: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.resumeStorage() }
+        notificationTokens.append(NotificationCenter.default.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: nil) { [weak self] _ in
+            Task { @MainActor in self?.pauseRecording(note: "系统音频服务已重置，可手动继续录音。", automatic: false, manualOnly: true) }
+        })
+        notificationTokens.append(NotificationCenter.default.addObserver(forName: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil, queue: nil) { [weak self] _ in
+            Task { @MainActor in
+                self?.storagePaused = true
+                self?.pauseRecording(note: "设备已锁定，解锁回到应用后可恢复录音。", automatic: self?.recordingPaused == true ? (self?.recovery?.automaticResumeAllowed ?? false) : true)
+            }
+        })
+        notificationTokens.append(NotificationCenter.default.addObserver(forName: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil, queue: nil) { [weak self] _ in
+            Task { @MainActor in self?.resumeStorage(); self?.resumeRecording(automatic: true) }
         })
     }
-    deinit { notificationTokens.forEach { NotificationCenter.default.removeObserver($0) } }
+    deinit { recordingDeadline?.cancel(); notificationTokens.forEach { NotificationCenter.default.removeObserver($0) } }
 
     /// Retain dirty state in memory while locked. Never replace an unreadable archive with an empty one.
     private func resumeStorage() {
@@ -109,7 +142,7 @@ final class AppModel: ObservableObject {
                 heartPoints = Array(archive.heartPoints.filter { $0.sample.date >= Date().addingTimeInterval(-7 * 86400) }.suffix(60000))
                 metrics = archive.metrics.filter { $0.date >= Date().addingTimeInterval(-14 * 86400) }
                 archiveLoaded = true
-                for index in episodes.indices where [.recording, .transcribing].contains(episodes[index].status) {
+                for index in episodes.indices where [.recording, .paused, .transcribing].contains(episodes[index].status) {
                     episodes[index].status = .failed
                     episodes[index].note = "上次任务被中断。可手动重试本地转写。"
                 }
@@ -135,7 +168,7 @@ final class AppModel: ObservableObject {
             return persisted
         } catch {
             writable = false; observing = false; starts.cancel(); consenting = false
-            health.stop(); audio.interrupt(); updateWakefulness()
+            health.stop(); stopRecording(); updateWakefulness()
             self.error = l("保存失败，已停止采集以保护数据，请不要退出应用：\(describe(error))")
             return false
         }
@@ -163,12 +196,16 @@ final class AppModel: ObservableObject {
     }
     func stop() {
         starts.cancel(); consenting = false
-        observing = false; observationStart = nil; health.stop(); detector.reset(); largeDetector.reset(); audio.stop()
+        observing = false; observationStart = nil; health.stop(); detector.reset(); largeDetector.reset(); stopRecording()
         updateWakefulness(); save()
     }
     func setForeground(_ value: Bool) {
         foreground = value
-        if !value { audio.stop(); save() } else { resumeStorage() }
+        if !value {
+            // Inactive also covers call UI and Control Center; keep the original session for recovery.
+            if !recordingPaused { pauseRecording(note: "应用暂离前台，回到应用后可恢复录音。", automatic: true) }
+            save()
+        } else { resumeStorage(); resumeRecording(automatic: true) }
         updateWakefulness()
     }
     private func ingest(_ sample: HeartSample) {
@@ -224,56 +261,151 @@ final class AppModel: ObservableObject {
             recordingID = nil; updateWakefulness(); work.finish(operation); return
         }
         do {
-            let startedAt = try audio.start(url: store.audioURL(id), maximumDuration: RecordingPolicy.duration(minutes: recordingMinutes)) { [weak self] result in
-                guard let self, self.work.owns(operation) else { return }
-                self.recordingID = nil; self.updateWakefulness()
-                self.modify(id) { $0.captureEnded = Date() }
-                switch result {
-                case .success(let url): Task { await self.transcribe(id: id, url: url, operation: operation) }
-                case .failure(let error):
-                    self.modify(id) { $0.status = .failed; $0.note = self.describe(error) }
-                    self.work.finish(operation)
-                }
-            }
-            modify(id) { $0.captureStarted = startedAt }
+            try beginPart(id: id, operation: operation, first: true)
         } catch {
             modify(id) { $0.status = .failed; $0.note = describe(error) }
-            recordingID = nil; updateWakefulness(); work.finish(operation); self.error = describe(error)
+            recordingID = nil; recovery = nil; updateWakefulness(); work.finish(operation); self.error = describe(error)
         }
     }
-    func stopRecording() { audio.stop() }
-    private func transcribe(id: UUID, url: URL, operation: UUID) async {
+    private func beginPart(id: UUID, operation: UUID, first: Bool) throws {
+        guard let store else { throw AudioCapture.CaptureError.recording }
+        let partID = UUID()
+        let url = store.audioURL(first ? id : partID)
+        let remaining = first ? (currentRecording?.maximumDuration ?? 3600) : (recovery?.remaining(at: Date()) ?? 0)
+        guard remaining > 0 else { stopRecording(); return }
+        let start = try audio.start(url: url, maximumDuration: remaining) { [weak self] result in
+            self?.partFinished(id: id, partID: partID, operation: operation, result: result)
+        }
+        activePartID = partID
+        if first {
+            recovery = RecordingRecovery(startedAt: start, maximumDuration: remaining)
+            recordingDeadline?.cancel()
+            recordingDeadline = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(remaining)) } catch { return }
+                guard self?.recordingID == id else { return }
+                self?.stopRecording()
+            }
+        } else { _ = recovery?.resumed(at: start) }
+        modify(id) {
+            if first { $0.captureStarted = start; $0.recordingParts = [] }
+            $0.recordingParts?.append(.init(id: partID, audioName: url.lastPathComponent, startedAt: start))
+            $0.status = .recording
+            $0.note = first ? "按本次设定时长录音；没有触发前语音。" : "录音已恢复；中断空档没有声音，已保留真实时间轴。"
+        }
+        updateWakefulness()
+    }
+    private func partFinished(id: UUID, partID: UUID, operation: UUID, result: Result<AudioCapture.CapturedAudio, Error>) {
+        guard recordingID == id, work.owns(operation), activePartID == partID else { return }
+        activePartID = nil
+        modify(id) { event in
+            if let index = event.recordingParts?.firstIndex(where: { $0.id == partID }),
+               let start = event.recordingParts?[index].startedAt {
+                let end: Date
+                switch result {
+                case .success(let output): end = start.addingTimeInterval(output.duration)
+                case .failure: end = Date()
+                }
+                event.recordingParts?[index].endedAt = end
+            }
+        }
+        if case .failure(let error) = result {
+            if recovery?.phase == .finished { finishRecording(id: id, operation: operation); return }
+            recovery?.pause(automatic: false, manualOnly: true)
+            modify(id) { $0.status = .paused; $0.note = describe(error) }
+            updateWakefulness(); return
+        }
+        if recordingPaused { return }
+        finishRecording(id: id, operation: operation)
+    }
+    private func pauseRecording(note: String, automatic: Bool, manualOnly: Bool = false) {
+        guard let id = recordingID, recovery != nil else { return }
+        recovery?.pause(automatic: automatic, manualOnly: manualOnly)
+        audio.stop() // The completion saves this part but keeps the session and operation reserved.
+        modify(id) { $0.status = .paused; $0.note = note }
+        updateWakefulness()
+    }
+    func resumeRecording(automatic: Bool = false) {
+        guard let id = recordingID, let operation = work.current, recordingPaused else { return }
+        guard let recovery, recovery.remaining(at: Date()) > 0 else { stopRecording(); return }
+        guard recovery.canResume(at: Date(), foreground: foreground,
+            storageReady: writable && !storagePaused && UIApplication.shared.isProtectedDataAvailable,
+            systemInterrupted: automatic && systemAudioInterrupted, automatic: automatic) else {
+            if !automatic { error = l("请在音频中断结束后解锁并回到前台，再继续录音。") }; return
+        }
+        do { try beginPart(id: id, operation: operation, first: false); systemAudioInterrupted = false }
+        catch {
+            self.recovery?.pause(automatic: false, manualOnly: true)
+            modify(id) { $0.status = .paused; $0.note = "自动续录未成功，请点击继续录音或结束并转写。" }
+            if !automatic { self.error = describe(error) }
+        }
+    }
+    func stopRecording() {
+        guard let id = recordingID, let operation = work.current else { return }
+        recovery?.finish()
+        audio.stop()
+        // If there is no active part (paused), there is no audio callback to finish the session.
+        if recordingID == id { finishRecording(id: id, operation: operation) }
+    }
+    private func finishRecording(id: UUID, operation: UUID) {
+        guard recordingID == id, work.owns(operation) else { return }
+        recordingDeadline?.cancel(); recordingDeadline = nil
+        recordingID = nil; activePartID = nil; recovery = nil; updateWakefulness()
+        modify(id) { $0.captureEnded = Date(); $0.status = .transcribing }
+        Task { await self.transcribe(id: id, operation: operation) }
+    }
+    private func transcribe(id: UUID, operation: UUID) async {
         guard work.owns(operation) else { return }
         defer { work.finish(operation) }
         guard writable, UIApplication.shared.isProtectedDataAvailable else {
             modify(id) { $0.status = .failed; $0.note = "数据暂不可用，未转写；解锁后可手动重试。" }; return
         }
+        guard let event = episodes.first(where: { $0.id == id }), let store else { return }
         modify(id) { $0.status = .transcribing }
         guard writable else { return }
-        do {
-            transcriptionCompleted = 0; transcriptionTotal = 0
-            let result = try await audio.transcribe(url: url,
-                language: episodes.first(where: { $0.id == id })?.transcriptionLanguage ?? language.resolved) { [weak self] done, total in
-                    self?.transcriptionCompleted = done; self?.transcriptionTotal = total
-                }
+        let parts: [RecordingPart]
+        if let saved = event.recordingParts, !saved.isEmpty { parts = saved }
+        else if let name = event.audioName {
+            parts = [.init(audioName: name, startedAt: event.captureStarted ?? event.trigger.date)]
+        } else { modify(id) { $0.status = .failed }; return }
+        var texts: [String] = [], segments: [TranscriptSegment] = []
+        var failures = 0, successes = 0, finishedChunks = 0
+        var lastFailure: String?
+        transcriptionCompleted = 0; transcriptionTotal = 0
+        for part in parts {
+            do {
+                let result = try await audio.transcribe(url: store.directory.appendingPathComponent(part.audioName),
+                    language: event.transcriptionLanguage) { [weak self] done, total in
+                        self?.transcriptionCompleted = finishedChunks + done
+                        self?.transcriptionTotal = finishedChunks + total
+                    }
+                successes += 1; failures += result.failedChunks
+                texts.append(result.text)
+                let offset = part.startedAt.timeIntervalSince(event.captureStarted ?? part.startedAt)
+                segments += result.segments.map { .init(text: $0.text, offset: $0.offset + offset, duration: $0.duration) }
+            } catch { failures += 1; lastFailure = describe(error) }
+            finishedChunks = max(finishedChunks + 1, transcriptionTotal)
             guard work.owns(operation) else { return }
+            // Checkpoint long jobs so a later suspension does not erase all completed text.
             modify(id) {
-                $0.transcript = result.text; $0.segments = result.segments
-                $0.failedTranscriptionChunks = result.failedChunks
-                $0.status = result.failedChunks > 0 ? .partial : .ready
-                $0.note = result.failedChunks > 0 ? "部分片段转写失败，可保留原音频后重试。" : (result.text.isEmpty ? "未识别到可用语音。" : "本地转写完成。请核对文字，心率变化不等于情绪变化。")
+                // A failed retry must not erase previously saved successful text.
+                if successes > 0 { $0.transcript = texts.joined(separator: "\n"); $0.segments = segments }
+                $0.failedTranscriptionChunks = failures
             }
-        } catch { modify(id) { $0.status = .failed; $0.note = describe(error) } }
+        }
+        modify(id) {
+            $0.status = successes == 0 ? .failed : (failures > 0 ? .partial : .ready)
+            $0.note = successes == 0 ? (lastFailure ?? "本地转写未成功，原始录音仍保留，可稍后重试。") : failures > 0 ? "部分片段转写失败，可保留原音频后重试。" : (texts.joined().isEmpty ? "未识别到可用语音。" : "本地转写完成。请核对文字，心率变化不等于情绪变化。")
+        }
     }
     func retry(_ event: Episode) async {
         guard writable, archiveLoaded, !storagePaused, !event.isDemo,
-              episodes.contains(where: { $0.id == event.id }), let store, let name = event.audioName,
+              episodes.contains(where: { $0.id == event.id }), !event.audioNames.isEmpty,
               let operation = work.begin() else { return }
         // Reserve before the first suspension; duplicate taps and heart triggers now see busy=true.
         defer { work.finish(operation) }
         guard await audio.permissions() else { error = AudioCapture.CaptureError.permission.message(language: language); return }
         guard work.owns(operation) else { return }
-        await transcribe(id: event.id, url: store.directory.appendingPathComponent(name), operation: operation)
+        await transcribe(id: event.id, operation: operation)
     }
     private func updateWakefulness() {
         UIApplication.shared.isIdleTimerDisabled = keepAwake && foreground && (observing || recordingID != nil)
@@ -309,23 +441,35 @@ final class AppModel: ObservableObject {
     func play(_ event: Episode) {
         guard recordingID == nil else { return }
         if playingID == event.id { player?.stop(); playingID = nil; return }
-        guard let owner = recordingOwner(event), let name = owner.audioName, let store else { return }
+        guard recordingOwner(event)?.audioNames.isEmpty == false else { return }
+        guard let location = event.audioLocation(in: episodes) else {
+            error = l("此事件发生在录音中断的空档，没有对应音频。"); return
+        }
+        playAudio(location, eventID: event.id)
+    }
+    func playPart(_ part: RecordingPart, eventID: UUID) {
+        guard recordingID == nil else { return }
+        playAudio(AudioLocation(audioName: part.audioName, offset: 0), eventID: eventID)
+    }
+    private func playAudio(_ location: AudioLocation, eventID: UUID) {
+        guard let store else { return }
         do {
+            player?.stop(); playingID = nil
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
             try AVAudioSession.sharedInstance().setActive(true)
-            player = try AVAudioPlayer(contentsOf: store.directory.appendingPathComponent(name))
-            let offset = event.audioOffset(in: episodes) ?? 0
-            guard offset < (player?.duration ?? 0) else {
+            let next = try AVAudioPlayer(contentsOf: store.directory.appendingPathComponent(location.audioName))
+            guard location.offset < next.duration else {
                 error = l("该标记超出实际录音范围，未找到对应音频。"); return
             }
-            player?.currentTime = offset
-            player?.play(); playingID = event.id
+            next.currentTime = location.offset
+            guard next.play() else { throw AudioCapture.CaptureError.recording }
+            player = next; playingID = eventID
         } catch { self.error = describe(error) }
     }
     func delete(_ event: Episode) {
         guard !busy, writable, !storagePaused, archiveLoaded else { return }
         do {
-            if let name = event.audioName { try store?.deleteAudio(name) }
+            for name in event.audioNames { try store?.deleteAudio(name) }
             player?.stop(); playingID = nil
             episodes.removeAll { $0.id == event.id || $0.linkedRecordingID == event.id }; reports = []; save()
         } catch { self.error = l("删除音频失败：\(describe(error))") }
@@ -334,7 +478,7 @@ final class AppModel: ObservableObject {
         guard !busy, writable, !storagePaused, archiveLoaded else { return }
         stop(); contextRefresh.cancel(); refreshingMetrics = false; player?.stop(); playingID = nil
         do {
-            for event in episodes { if let name = event.audioName { try store?.deleteAudio(name) } }
+            for event in episodes { for name in event.audioNames { try store?.deleteAudio(name) } }
             episodes = []; reports = []; heartPoints = []; metrics = []; demoMetrics = []; save()
         } catch { self.error = l("清除未完成：\(describe(error))") }
     }

@@ -21,7 +21,9 @@ jobs:
           python3 scripts/check-localizations.py
           python3 scripts/tests/test_setup_progress.py
       - name: Test core
-        run: swift test -j 4
+        run: |
+          swift test -j 4
+          python3 scripts/tests/check-appmodel.py
       - name: Generate Xcode project
         run: |
           brew install xcodegen

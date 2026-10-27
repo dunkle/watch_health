@@ -28,11 +28,20 @@ struct RootView: View {
         } message: { Text(model.error ?? "") }
         .safeAreaInset(edge: .top, spacing: 0) {
             if model.recordingID != nil {
-                HStack {
-                    Image(systemName: "record.circle.fill").symbolEffect(.pulse)
-                    Text(l("正在录音 · 上限 \(Int((model.currentRecording?.maximumDuration ?? 3600) / 60)) 分钟")).font(.subheadline.bold())
-                    Spacer(); Button(l("停止")) { model.stopRecording() }.font(.subheadline.bold())
-                }.foregroundStyle(.white).padding().background(Palette.coral)
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(model.recordingPaused ? l("录音已暂停") : l("正在录音"),
+                          systemImage: model.recordingPaused ? "pause.circle.fill" : "record.circle.fill")
+                        .font(.subheadline.bold())
+                    Text(l("本次上限 \(Int((model.currentRecording?.maximumDuration ?? 3600) / 60)) 分钟，包含中断等待时间"))
+                        .font(.caption)
+                    if model.recordingPaused, let note = model.currentRecording?.note {
+                        Text(l.key(note)).font(.caption)
+                    }
+                    HStack {
+                        if model.recordingPaused { Button(l("继续录音")) { model.resumeRecording() } }
+                        Button(l("结束并转写")) { model.stopRecording() }
+                    }.buttonStyle(.bordered).font(.subheadline.bold()).tint(.white)
+                }.foregroundStyle(.white).padding().frame(maxWidth: .infinity, alignment: .leading).background(Palette.coral)
                 .accessibilityElement(children: .contain)
                 if let recording = model.currentRecording, let start = recording.captureStarted {
                     SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -88,6 +97,7 @@ struct NowView: View {
                 }
                 Spacer(); Image(systemName: "leaf.circle.fill").font(.system(size: 42)).foregroundStyle(Palette.teal)
             }
+            CompanionView()
             Surface {
                 HStack {
                     Label(model.observing ? l("观察已开启") : l("留一点空间给自己"), systemImage: model.observing ? "dot.radiowaves.left.and.right" : "sun.horizon")
@@ -148,7 +158,7 @@ struct NowView: View {
                 List {
                     Section(l("开启前请了解")) {
                         Text(l("心率小幅变化可开始录音。本次最多 \(model.recordingMinutes) 分钟；可随时停止，没有触发前的声音。"))
-                        Text(l("长时间录音会增加耗电和空间占用。屏幕需保持前台；锁屏、切后台或来电仍会结束录音。"))
+                        Text(l("长录音需保持前台，会增加耗电与空间占用。中断时暂停，回到前台且系统允许时尝试续录；不会补录中断空档。"))
                         Text(l("请确保在场的人知情同意。在私密谈话、会议或不适合录音的场景中结束观察。"))
                         Text(l("本地转写和本地摘要，不上传档案。原始音频保存在应用中，直到你删除。"))
                         Text(l("手表运动会话可提供更密集心率，但会保存真实运动记录并增加耗电；普通状态下心率采样可能稀疏。"))
@@ -235,7 +245,7 @@ struct EpisodeDetail: View {
                         }
                     }
                     let owner = model.recordingOwner(event)
-                    if owner?.status == .recording || owner?.status == .transcribing {
+                    if owner?.status == .recording || owner?.status == .paused || owner?.status == .transcribing {
                         Text(l("录音结束后可播放；本地转写完成后显示文字。"))
                             .font(.caption).foregroundStyle(.secondary)
                     }
@@ -249,6 +259,15 @@ struct EpisodeDetail: View {
                     if event.linkedRecordingID != nil {
                         Text(l("关联录音位置：+\(Int(event.audioOffset(in: model.episodes) ?? 0)) 秒。点击播放从该位置开始。"))
                             .font(.caption).foregroundStyle(Palette.teal)
+                    }
+                    if let parts = owner?.recordingParts, parts.count > 1 {
+                        Text(l("此录音包含 \(parts.count) 个实际片段；中断空档不包含声音。"))
+                            .font(.caption).foregroundStyle(Palette.muted)
+                        ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
+                            Button(l("播放片段 \(index + 1) · \(l.date(part.startedAt, seconds: true))")) {
+                                model.playPart(part, eventID: id)
+                            }.disabled(model.recordingID != nil)
+                        }
                     }
                     if let count = owner?.failedTranscriptionChunks, count > 0 {
                         Text(l("有 \(count) 段未能转写，原始音频仍保留。"))
@@ -309,6 +328,7 @@ struct ReportView: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         Page {
+            HStack { AvatarView(configuration: model.avatar, size: 62); Text(l("和你一起回顾今天")).font(.headline) }
             DatePicker(l("摘要日期"), selection: $model.selectedDay, displayedComponents: .date)
             Surface {
                 Image(systemName: "sparkles").font(.largeTitle).foregroundStyle(Palette.teal)
@@ -357,18 +377,23 @@ struct SettingsView: View {
                 Text(l("切换界面和新录音的转写语言；旧录音重试保留原语言，旧摘要需重新生成。"))
                     .font(.caption)
             }
+            Section(l("我的虚拟形象")) {
+                NavigationLink { AvatarSettingsView() } label: {
+                    HStack { AvatarView(configuration: model.avatar, size: 54); Text(model.avatar.name.isEmpty ? l("定制我的形象") : model.avatar.name) }
+                }
+            }
             Section(l("录音与触发设置")) {
-                Stepper(value: $model.recordingMinutes, in: 1...180) {
-                    Text(l("最长录音 \(model.recordingMinutes) 分钟"))
+                NavigationLink { RecordingDurationView() } label: {
+                    LabeledContent(l("最长录音时间"), value: l("\(model.recordingMinutes) 分钟"))
                 }.disabled(model.busy || model.observing || model.consenting)
                 Toggle(l("观察期间保持屏幕唤醒"), isOn: $model.keepAwake)
-                Text(l("默认60分钟，范围1–180分钟。分段转写保留时间轴；后台限制仍然生效。"))
+                Text(l("默认1小时，可选1分钟至24小时。中断等待计入本次时限；恢复不会重新计时，24小时不是持续录音保证。"))
                     .font(.caption)
                 NavigationLink(l("查看综合算法与健康指标")) { HealthMetricsView() }
             }
             Section(l("运行状态")) {
                 Label(l("端侧优先 · 无云端接口"), systemImage: "iphone.gen3.radiowaves.left.and.right")
-                Text(l("手机保持前台时可自动触发录音。锁屏或切到后台会结束当前录音，并尝试转写已录片段；系统挂起时可能中断，稍后可重试。"))
+                Text(l("前台可触发和恢复录音。来电、锁屏或切后台时保留已录片段；系统允许且回到前台后尝试续录，否则请点击继续。进程终止后不自动开麦，可重试已存音频的转写。"))
                 Text(l("小幅触发：至少5次/分且5%；大幅标记：至少20次/分且25%。需要至少5个新鲜样本，事件冷却30秒。多指标只调整事件显著度，不诊断情绪。"))
             }
             Section(l("录音与隐私")) {
