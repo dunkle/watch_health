@@ -38,6 +38,10 @@ struct MarkerDetail: View {
                 Section(l("对应的声音与文字")) {
                     if marker.isDemo {
                         Text(l("模拟数据，不来自传感器或真实录音。"))
+                    } else if marker.owner(in: model.episodes)?.cleanupPending == true {
+                        Text(l("音频清理待完成，可能已移除部分文件；请在处理中心核对。"))
+                    } else if marker.owner(in: model.episodes)?.audioPurgedAt != nil {
+                        Text(l("原音频已按所选策略清理；文字与来源位置仍保留，不能播放或重转写。"))
                     } else if marker.audioLocation(in: model.episodes) == nil {
                         Text(l("此事件发生在录音中断的空档，没有对应音频。"))
                     } else {
@@ -50,6 +54,7 @@ struct MarkerDetail: View {
                         Text("+\(Int(segment.offset))s · " + segment.text).textSelection(.enabled)
                     }
                     if let owner = marker.owner(in: model.episodes) {
+                        if !context.isEmpty { Button(l("收藏附近原话")) { model.saveClip(recordingID: owner.id, at: marker.date) }.disabled(!model.canWriteArchive) }
                         NavigationLink(l("查看所属录音与处理状态")) { EpisodeDetail(id: owner.id) }
                     }
                 }
@@ -96,6 +101,7 @@ struct HourJournalView: View {
                     Text(l("按小时找回每个片刻")).font(.title2.bold())
                     HeartCurveView(day: model.selectedDay)
                     NavigationLink(l("查看处理中心")) { ProcessingCenterView() }
+                    NavigationLink(l("高光与本地搜索")) { JournalLibraryView() }
                     if hours.isEmpty {
                         ContentUnavailableView(l("这一天还没有记录"), systemImage: "waveform", description: Text(l("未记录不代表没有情绪变化。")))
                     } else {
@@ -169,9 +175,9 @@ struct ProcessingCenterView: View {
                     stage(l("摘要"), .complete); Text(l.key(report.engine)).font(.caption)
                 } else if let failure = model.summaryFailure, let day = model.summaryDay, Calendar.current.isDate(day, inSameDayAs: model.selectedDay) {
                     stage(l("摘要"), .failed); Text(failure).font(.caption)
-                } else if !model.summarizing { stage(l("摘要"), model.dayEvents.isEmpty ? .unavailable : .pending) }
-                Button(l("生成每日摘要")) { Task { await model.summarize() } }.disabled(model.dayEvents.isEmpty || model.busy || model.summarizing)
-                Button(l("使用规则摘要")) { model.ruleSummary() }.disabled(model.dayEvents.isEmpty || model.busy || model.summarizing)
+                } else if !model.summarizing { stage(l("摘要"), model.summaryEvidenceIDs.isEmpty ? .unavailable : .pending) }
+                Button(l("生成每日摘要")) { Task { await model.summarize() } }.disabled(model.summaryEvidenceIDs.isEmpty || model.busy || model.summarizing)
+                Button(l("使用规则摘要")) { model.ruleSummary() }.disabled(model.summaryEvidenceIDs.isEmpty || model.busy || model.summarizing)
             }
             Section(l("录音与转写任务")) {
                 if owners.isEmpty { Text(l("暂无录音任务。")) }
@@ -181,6 +187,13 @@ struct ProcessingCenterView: View {
                         stage(l("录音"), owner.recordingStage)
                         stage(l("本地转写"), owner.transcriptionStage)
                         Text(l.key(owner.note)).font(.caption).foregroundStyle(.secondary)
+                        if owner.audioPurgedAt != nil { Text(l("原音频已清理，文字保留。")).font(.caption) }
+                        if owner.audioPurgedAt == nil, owner.cleanupAfterTranscription == true, owner.status == .ready {
+                            Button(l("继续清理原音频")) { model.requestCleanup(owner.id) }.disabled(model.busy || !model.canWriteArchive)
+                            if owner.cleanupStartedAt == nil {
+                                Button(l("保留原音频，取消清理")) { model.cancelCleanup(owner.id) }.disabled(!model.canWriteArchive)
+                            }
+                        }
                         if model.transcriptionID == owner.id, model.transcriptionTotal > 0 {
                             Text(l("当前已处理分段：\(model.transcriptionCompleted)/\(model.transcriptionTotal)"))
                             ProgressView(value: Double(model.transcriptionCompleted), total: Double(max(1, model.transcriptionTotal)))
@@ -188,7 +201,7 @@ struct ProcessingCenterView: View {
                         if model.recordingID == owner.id {
                             if model.recordingPaused { Button(l("继续录音")) { model.resumeRecording() } }
                             Button(l("结束并转写")) { model.stopRecording() }
-                        } else if (owner.status == .failed || owner.status == .partial), !owner.audioNames.isEmpty, !owner.isDemo {
+                        } else if (owner.status == .failed || owner.status == .partial || owner.status == .deferred), owner.audioPurgedAt == nil, !owner.audioNames.isEmpty, !owner.isDemo {
                             Button(l("重试本地转写")) { Task { await model.retry(owner) } }.disabled(model.busy || !model.canWriteArchive)
                         }
                     }.padding(.vertical, 5)

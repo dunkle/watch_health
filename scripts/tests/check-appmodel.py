@@ -17,6 +17,6 @@ with tempfile.TemporaryDirectory(prefix='watchmind-model-') as temporary:
     environment = dict(os.environ, CLANG_MODULE_CACHE_PATH='/tmp/watchmind-model-module-cache')
     command = [swiftc, '-swift-version', '5', '-I', str(Path(build) / 'Modules'),
                str(root / 'scripts/tests/appmodel/PlatformDoubles.swift'), str(target / 'AppModel.swift'),
-               str(root / 'scripts/tests/appmodel/Scenarios.swift'), *map(str, objects), '-o', str(target / 'scenarios')]
+               str(root / 'scripts/tests/appmodel/Scenarios.swift'), str(root / 'iOS/AppModel+Journal.swift'), *map(str, objects), '-o', str(target / 'scenarios')]
     subprocess.run(command, cwd=root, env=environment, check=True)
     subprocess.run([str(target / 'scenarios')], cwd=root, env=environment, check=True, timeout=30)

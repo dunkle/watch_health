@@ -61,7 +61,7 @@ public extension Episode {
     }
     /// Legacy files use a single continuous timeline. New files only resolve inside a recorded part.
     func audioLocation(in events: [Episode]) -> AudioLocation? {
-        guard let owner = owner(in: events), let start = owner.captureStarted else { return nil }
+        guard let owner = owner(in: events), owner.audioPurgedAt == nil, let start = owner.captureStarted else { return nil }
         guard let parts = owner.recordingParts, !parts.isEmpty else {
             return owner.audioName.map { AudioLocation(audioName: $0, offset: max(0, trigger.date.timeIntervalSince(start))) }
         }

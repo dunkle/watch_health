@@ -45,6 +45,10 @@ class AVAudioPlayer {
     var starts = 0
     var failNextStart = false
     var failTranscription = false
+    var partialTranscription = false
+    var simulateSkip = false
+    var lastFilter = false
+    var failingNames: Set<String> = []
     var completion: ((Result<CapturedAudio, Error>) -> Void)?
     var oldCompletion: ((Result<CapturedAudio, Error>) -> Void)?
     var startDate = Date()
@@ -67,11 +71,13 @@ class AVAudioPlayer {
         starts += 1; self.completion = completion; startDate = Date(); currentURL = url
         return startDate
     }
-    struct TranscriptionResult { var text: String; var segments: [TranscriptSegment]; var failedChunks: Int; var duration: TimeInterval }
-    func transcribe(url: URL, language: AppLanguage, progress: @escaping @MainActor (Int, Int) -> Void) async throws -> TranscriptionResult {
-        if failTranscription { throw CaptureError.recording }
+    struct TranscriptionResult { var text: String; var segments: [TranscriptSegment]; var failedChunks: Int; var duration: TimeInterval; var spans: [(Range<Double>, ProcessingSpan.Outcome)] }
+    func transcribe(url: URL, language: AppLanguage, filterQuiet: Bool = false, sensitivity: Int = 3, protectedOffsets: [Double] = [], progress: @escaping @MainActor (Int, Int) -> Void) async throws -> TranscriptionResult {
+        lastFilter = filterQuiet
+        if simulateSkip && filterQuiet && protectedOffsets.isEmpty { return .init(text: "", segments: [], failedChunks: 0, duration: 60, spans: [(0..<60, .skipped)]) }
+        if failTranscription || failingNames.contains(url.lastPathComponent) { throw CaptureError.recording }
         progress(1, 1)
-        return .init(text: "saved text", segments: [.init(text: "saved text", offset: 0, duration: 0.001)], failedChunks: 0, duration: 60)
+        return .init(text: "saved text", segments: [.init(text: "saved text", offset: 0, duration: 0.001)], failedChunks: partialTranscription ? 1 : 0, duration: 60, spans: partialTranscription ? [(0..<30, .recognized), (30..<60, .failed)] : [(0..<60, .recognized)])
     }
 }
 @MainActor class HealthSource {
@@ -92,6 +98,7 @@ typealias Archive = JournalArchive
 @MainActor class LocalStore {
     static var archive = Archive()
     static var failSave = false
+    static var failDelete = false
     static var deletedNames: [String] = []
     var directory = URL(fileURLWithPath: "/tmp")
     init() throws {}
@@ -101,10 +108,19 @@ typealias Archive = JournalArchive
         Self.archive = archive
     }
     func audioURL(_ id: UUID) -> URL { directory.appendingPathComponent(id.uuidString + ".m4a") }
-    func deleteAudio(_ name: String) throws { Self.deletedNames.append(name) }
+    func deleteAudio(_ name: String) throws { if Self.failDelete { throw CocoaError(.fileWriteNoPermission) }; Self.deletedNames.append(name) }
 }
 enum LocalIntelligence {
-    static func summarize(day: Date, events: [Episode], language: AppLanguage, recordings: [Episode]) async throws -> DailyReport {
-        Insights.report(day: day, events: events, language: language)
+    static func summarize(day: Date, events: [Episode], language: AppLanguage, recordings: [Episode], markers: [MomentMarker] = [], clips: [EvidenceClip] = [], memories: [JournalMemory] = [], coverage: DailyCoverage? = nil) async throws -> DailyReport {
+        Insights.report(day: day, events: events, language: language, recordings: recordings, markers: markers, clips: clips)
     }
+}
+
+extension ProcessInfo {
+    enum ThermalState { case nominal, serious, critical }
+    var thermalState: ThermalState { .nominal }
+    var isLowPowerModeEnabled: Bool { ScenarioDefaults.store.bool(forKey: "fakeLowPower") }
+}
+enum AudioQuality {
+    static func analyze(url: URL, sensitivity: Int) -> AudioQualitySummary? { nil }
 }

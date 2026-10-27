@@ -27,7 +27,7 @@ public struct MomentMarker: Codable, Identifiable, Sendable {
 
 public enum RecordingTimeline {
     public static func location(at date: Date, in owner: Episode) -> AudioLocation? {
-        guard let start = owner.captureStarted, date >= start else { return nil }
+        guard owner.audioPurgedAt == nil, let start = owner.captureStarted, date >= start else { return nil }
         if let parts = owner.recordingParts, !parts.isEmpty {
             guard let part = parts.first(where: { part in
                 let isActive = part.id == parts.last?.id && owner.status == .recording

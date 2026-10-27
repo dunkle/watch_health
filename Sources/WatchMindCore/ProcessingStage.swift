@@ -28,7 +28,7 @@ public extension Episode {
         case .partial: return .partial
         case .transcribing: return .running
         case .failed: return transcriptionAttempted == true ? .failed : .unknown
-        case .recording, .paused: return .pending
+        case .recording, .paused, .deferred: return .pending
         case .missed, .linked: return .unavailable
         }
     }

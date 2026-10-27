@@ -27,7 +27,7 @@ public struct TranscriptSegment: Codable, Equatable, Sendable {
 }
 
 public enum CaptureStatus: String, Codable, Sendable {
-    case missed, recording, paused, transcribing, ready, failed, linked, partial
+    case missed, recording, paused, transcribing, ready, failed, linked, partial, deferred
 }
 
 public struct Episode: Codable, Identifiable, Sendable {
@@ -48,6 +48,12 @@ public struct Episode: Codable, Identifiable, Sendable {
     public var failedTranscriptionChunks: Int?
     public var recordingParts: [RecordingPart]?
     public var transcriptionAttempted: Bool?
+    public var cleanupAfterTranscription: Bool?
+    public var cleanupPending: Bool?
+    public var cleanupStartedAt: Date?
+    public var audioPurgedAt: Date?
+    public var audioQuality: AudioQualitySummary?
+    public var fileTranscripts: [FileTranscript]?
     /// Before language selection existed, all real recordings used zh-CN.
     public var transcriptionLanguage: AppLanguage {
         AppLanguage(rawValue: speechLanguage ?? "zh-Hans")?.resolved ?? .simplifiedChinese
@@ -66,6 +72,7 @@ public struct DailyReport: Codable, Sendable {
     public var episodeIDs: [UUID]
     public var generatedAt: Date
     public var language: String?
+    public var evidenceIDs: [UUID]?
     public init(day: Date, text: String, engine: String, episodeIDs: [UUID], generatedAt: Date = Date(), language: String? = nil) {
         self.day = day; self.text = text; self.engine = engine
         self.episodeIDs = episodeIDs; self.generatedAt = generatedAt; self.language = language

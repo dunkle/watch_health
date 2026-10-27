@@ -10,6 +10,7 @@
 		0C1B04713A5E5005CCF4DB8F /* WatchMindWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846DF7D94289884D2E945480 /* WatchMindWatchApp.swift */; };
 		0E52EDB58528E67C5AF3A79E /* LocalIntelligence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0174D50091A62C076B3E6C9C /* LocalIntelligence.swift */; };
 		31D8509473A0FA9F95C737EA /* WatchMindWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 1183099AB2FB299E9D0E621D /* WatchMindWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		50E1E26BF882BE85E3D12A42 /* AudioQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FBF46A2E147098F3D7F756 /* AudioQuality.swift */; };
 		5F9734C7ADF1F465526DD72C /* LocalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C237E4404ADF91F23429DAB4 /* LocalStore.swift */; };
 		6479D0182FBDCF1633182F0B /* WatchMindCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9C8720C7989C17BAA75FADCD /* WatchMindCore */; };
 		7E50F75E0222277BA93EDE21 /* HealthViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D7096C301D6891CDB01B128 /* HealthViews.swift */; };
@@ -17,9 +18,12 @@
 		921DB404AEC575861AB1BD88 /* WatchReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABEC3679A0742ADD38CE2C98 /* WatchReceiver.swift */; };
 		931F1BFA85A706ABF4B0582C /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62AC2A8AC09566E06295147 /* Views.swift */; };
 		9D1BDECECF41017025CE0FF3 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA9EC9C9CDFE6A561B89590A /* InfoPlist.strings */; };
+		AB1E83899AD90D7F4E61183D /* WellbeingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B0AB28C62310B6B10BAA74D /* WellbeingViews.swift */; };
 		ADE911F72C8BC21609574489 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA9EC9C9CDFE6A561B89590A /* InfoPlist.strings */; };
 		C6A6A5532D559A7BCCC4F531 /* AvatarViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DA85858CE38E58EA701C7B /* AvatarViews.swift */; };
+		D68F3A47A855C197C7E162E5 /* AppModel+Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D4DF04A40973A1CBA55A967 /* AppModel+Journal.swift */; };
 		D6A0A46871E5F5E63A1A4B53 /* WatchMindApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1D84C728D8B1FA3E007CBC /* WatchMindApp.swift */; };
+		D815B64F881FEA0876ACC80D /* LibraryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCF48223A38C826C2BC3C3CD /* LibraryViews.swift */; };
 		DCB2E05A26D43B472AA8601F /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1452393C6623E3F83366C1AE /* AppModel.swift */; };
 		E4F28740D01165BE1C1F3D52 /* WatchMindCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7D218EE453ED0DD421BAFA95 /* WatchMindCore */; };
 		EABF24D8A78E1D3F4A8989E3 /* HealthSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD838D663A9EFBA7D3927913 /* HealthSource.swift */; };
@@ -54,13 +58,16 @@
 /* Begin PBXFileReference section */
 		0174D50091A62C076B3E6C9C /* LocalIntelligence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalIntelligence.swift; sourceTree = "<group>"; };
 		05736F538AB3C15E86A9E525 /* AudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCapture.swift; sourceTree = "<group>"; };
+		0D4DF04A40973A1CBA55A967 /* AppModel+Journal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Journal.swift"; sourceTree = "<group>"; };
 		1183099AB2FB299E9D0E621D /* WatchMindWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatchMindWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		11FBF46A2E147098F3D7F756 /* AudioQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioQuality.swift; sourceTree = "<group>"; };
 		1452393C6623E3F83366C1AE /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		18A1F2C2745719178F560105 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		1D7096C301D6891CDB01B128 /* HealthViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthViews.swift; sourceTree = "<group>"; };
 		3B0B69FFD0C77100ADEBDD72 /* RecordingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSettingsView.swift; sourceTree = "<group>"; };
 		67AD3B7C5D213AACBE81AB4D /* JournalViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalViews.swift; sourceTree = "<group>"; };
 		74DA85858CE38E58EA701C7B /* AvatarViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarViews.swift; sourceTree = "<group>"; };
+		7B0AB28C62310B6B10BAA74D /* WellbeingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WellbeingViews.swift; sourceTree = "<group>"; };
 		846DF7D94289884D2E945480 /* WatchMindWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMindWatchApp.swift; sourceTree = "<group>"; };
 		9B7E1C08E5D306114294BAB2 /* WatchMind.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = WatchMind.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A30B6582E870776E5362B00A /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -70,6 +77,7 @@
 		DD838D663A9EFBA7D3927913 /* HealthSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSource.swift; sourceTree = "<group>"; };
 		F62AC2A8AC09566E06295147 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		F754A84B391DA2D30BE5ED64 /* watch_health */ = {isa = PBXFileReference; lastKnownFileType = folder; name = watch_health; path = .; sourceTree = SOURCE_ROOT; };
+		FCF48223A38C826C2BC3C3CD /* LibraryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,17 +113,21 @@
 			isa = PBXGroup;
 			children = (
 				1452393C6623E3F83366C1AE /* AppModel.swift */,
+				0D4DF04A40973A1CBA55A967 /* AppModel+Journal.swift */,
 				05736F538AB3C15E86A9E525 /* AudioCapture.swift */,
+				11FBF46A2E147098F3D7F756 /* AudioQuality.swift */,
 				74DA85858CE38E58EA701C7B /* AvatarViews.swift */,
 				DD838D663A9EFBA7D3927913 /* HealthSource.swift */,
 				1D7096C301D6891CDB01B128 /* HealthViews.swift */,
 				67AD3B7C5D213AACBE81AB4D /* JournalViews.swift */,
+				FCF48223A38C826C2BC3C3CD /* LibraryViews.swift */,
 				0174D50091A62C076B3E6C9C /* LocalIntelligence.swift */,
 				C237E4404ADF91F23429DAB4 /* LocalStore.swift */,
 				3B0B69FFD0C77100ADEBDD72 /* RecordingSettingsView.swift */,
 				F62AC2A8AC09566E06295147 /* Views.swift */,
 				AA1D84C728D8B1FA3E007CBC /* WatchMindApp.swift */,
 				ABEC3679A0742ADD38CE2C98 /* WatchReceiver.swift */,
+				7B0AB28C62310B6B10BAA74D /* WellbeingViews.swift */,
 			);
 			path = iOS;
 			sourceTree = "<group>";
@@ -275,18 +287,22 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D68F3A47A855C197C7E162E5 /* AppModel+Journal.swift in Sources */,
 				DCB2E05A26D43B472AA8601F /* AppModel.swift in Sources */,
 				F56EA3826389D322A0CB7471 /* AudioCapture.swift in Sources */,
+				50E1E26BF882BE85E3D12A42 /* AudioQuality.swift in Sources */,
 				C6A6A5532D559A7BCCC4F531 /* AvatarViews.swift in Sources */,
 				EABF24D8A78E1D3F4A8989E3 /* HealthSource.swift in Sources */,
 				7E50F75E0222277BA93EDE21 /* HealthViews.swift in Sources */,
 				8498EB902B46DA367BCED4BB /* JournalViews.swift in Sources */,
+				D815B64F881FEA0876ACC80D /* LibraryViews.swift in Sources */,
 				0E52EDB58528E67C5AF3A79E /* LocalIntelligence.swift in Sources */,
 				5F9734C7ADF1F465526DD72C /* LocalStore.swift in Sources */,
 				FEF5B345477010FD66A1B66E /* RecordingSettingsView.swift in Sources */,
 				931F1BFA85A706ABF4B0582C /* Views.swift in Sources */,
 				D6A0A46871E5F5E63A1A4B53 /* WatchMindApp.swift in Sources */,
 				921DB404AEC575861AB1BD88 /* WatchReceiver.swift in Sources */,
+				AB1E83899AD90D7F4E61183D /* WellbeingViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

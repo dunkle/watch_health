@@ -41,16 +41,22 @@ public enum Insights {
         // Legacy short recordings may not have word timestamps; never pretend a linked marker is aligned.
         return event.linkedRecordingID == nil && event.segments.isEmpty ? event.transcript : ""
     }
-    public static func report(day: Date, events: [Episode], language: AppLanguage = .simplifiedChinese, recordings: [Episode]? = nil) -> DailyReport {
+    public static func report(day: Date, events: [Episode], language: AppLanguage = .simplifiedChinese, recordings: [Episode]? = nil, markers: [MomentMarker] = [], clips: [EvidenceClip] = []) -> DailyReport {
         let universe = recordings ?? events
         let l = Localizer(language: language)
         let available = events.filter { !voiceContext(for: $0, events: universe).isEmpty }
         let feelings = events.compactMap(\.feeling).map { l.key($0) }
         let contexts = available.map { "• " + l.date($0.trigger.date) + " · " + voiceContext(for: $0, events: universe) }.joined(separator: "\n")
+        let dayMarkers = markers.filter { Calendar.current.isDate($0.date, inSameDayAs: day) && $0.owner(in: universe) != nil }
+        let dayClips = clips.filter { clip in clip.confirmed && Calendar.current.isDate(clip.date, inSameDayAs: day) && universe.contains(where: { event in event.id == clip.recordingID }) }
+        let manual = dayMarkers.map { "• " + l.date($0.date) + " · " + $0.note + " · " + $0.context(in: universe).map(\.text).joined(separator: " ") }
+        let highlights = dayClips.map { "• " + l.date($0.date) + " · " + $0.text }
         let text = l("今天记录了 \(events.count) 次心率波动，其中 \(available.count) 次有可用语音。\n")
             + (feelings.isEmpty ? l("尚无本人确认的感受，不能据此判断心情。") : l("本人标记的感受：\(feelings.joined(separator: l("、")))。"))
             + (contexts.isEmpty ? l("\n暂无可总结的语音上下文。") : l("\n语音回顾：\n\(contexts)"))
-            + l("\n摘要仅使用各标记附近20秒窗口内的文字；原始音频与完整转写仍保留在本机。心率不证明情绪或因果。")
-        return DailyReport(day: day, text: text, engine: l("本地规则摘要（非大模型）"), episodeIDs: events.map(\.id), language: l.language.rawValue)
+            + l("\n摘要只描述实际记录的片段，未采集的生活保持未知。原始音频可能按所选策略清理，文字仍保留。心率不证明情绪或因果。")
+        var report = DailyReport(day: day, text: text + (manual.isEmpty ? "" : l("\n人工标记与原话：\n\(manual.joined(separator: "\n"))")) + (highlights.isEmpty ? "" : l("\n本人确认的高光：\n\(highlights.joined(separator: "\n"))")), engine: l("本地规则摘要（非大模型）"), episodeIDs: events.map(\.id), language: l.language.rawValue)
+        report.evidenceIDs = events.map(\.id) + dayMarkers.map(\.id) + dayClips.map(\.id)
+        return report
     }
 }

@@ -104,6 +104,8 @@ struct NowView: View {
                 Spacer(); Image(systemName: "leaf.circle.fill").font(.system(size: 42)).foregroundStyle(Palette.teal)
             }
             CompanionView()
+            NavigationLink(l("健康趋势与日常安排")) { HealthOverviewView() }
+            NavigationLink(l("高光与本地搜索")) { JournalLibraryView() }
             Surface {
                 HStack {
                     Label(model.observing ? l("观察已开启") : l("留一点空间给自己"), systemImage: model.observing ? "dot.radiowaves.left.and.right" : "sun.horizon")
@@ -167,7 +169,7 @@ struct NowView: View {
                         Text(l("心率小幅变化可开始录音。本次最多 \(model.recordingMinutes) 分钟；可随时停止，没有触发前的声音。"))
                         Text(l("长录音需保持前台，会增加耗电与空间占用。中断时暂停，回到前台且系统允许时尝试续录；不会补录中断空档。"))
                         Text(l("请确保在场的人知情同意。在私密谈话、会议或不适合录音的场景中结束观察。"))
-                        Text(l("本地转写和本地摘要，不上传档案。原始音频保存在应用中，直到你删除。"))
+                        Text(model.cleanupNewRecordings ? l("本次已开启：完整转写并可靠保存文字后清理原音频；失败保留，清理后不能播放或重转写。") : l("本地转写和本地摘要，不上传档案。原始音频保存在应用中，直到你删除。"))
                         Text(l("手表运动会话可提供更密集心率，但会保存真实运动记录并增加耗电；普通状态下心率采样可能稀疏。"))
                     }
                     Button(l("我了解，允许本次观察触发录音")) { showConsent = false; Task { await model.start() } }
@@ -231,12 +233,28 @@ struct EpisodeDetail: View {
                     HStack {
                         Label(l("语音上下文"), systemImage: "quote.opening").font(.headline)
                         Spacer()
-                        if model.recordingOwner(event)?.audioName != nil {
+                        if model.recordingOwner(event)?.audioName != nil && model.recordingOwner(event)?.audioPurgedAt == nil && model.recordingOwner(event)?.cleanupPending != true {
                             Button { model.play(event) } label: { Image(systemName: model.playingID == id ? "stop.circle" : "play.circle") }
                                 .disabled(model.recordingID != nil).accessibilityLabel(l("播放或停止原始录音"))
                         }
                     }
                     let owner = model.recordingOwner(event)
+                    if owner?.cleanupPending == true { Text(l("音频清理待完成，可能已移除部分文件；请在处理中心核对。")).font(.caption) }
+                    if owner?.audioPurgedAt != nil {
+                        Text(l("原音频已按所选策略清理；文字与来源位置仍保留，不能播放或重转写。"))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let quality = owner?.audioQuality {
+                        Text(l("按第\(quality.sensitivity)档分析 \(Int(quality.analyzedSeconds)) 秒音频，低能量 \(Int(quality.lowEnergySeconds)) 秒；能量值不代表人声或情绪。"))
+                            .font(.caption).foregroundStyle(.secondary)
+                        if let seconds = quality.speechSeconds {
+                            Text(l("声音分类器检出语音候选约 \(Int(seconds)) 秒，需核对；不代表情绪或真实身份。"))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if let owner, !owner.segments.isEmpty {
+                        Button(l("收藏附近原话")) { model.saveClip(recordingID: owner.id, at: event.trigger.date) }.disabled(!model.canWriteArchive)
+                    }
                     if owner?.status == .recording || owner?.status == .paused || owner?.status == .transcribing {
                         Text(l("录音结束后可播放；本地转写完成后显示文字。"))
                             .font(.caption).foregroundStyle(.secondary)
@@ -252,7 +270,7 @@ struct EpisodeDetail: View {
                         Text(l("关联录音位置：+\(Int(event.audioOffset(in: model.episodes) ?? 0)) 秒。点击播放从该位置开始。"))
                             .font(.caption).foregroundStyle(Palette.teal)
                     }
-                    if let parts = owner?.recordingParts, parts.count > 1 {
+                    if let parts = owner?.recordingParts, parts.count > 1, owner?.audioPurgedAt == nil, owner?.cleanupPending != true {
                         Text(l("此录音包含 \(parts.count) 个实际片段；中断空档不包含声音。"))
                             .font(.caption).foregroundStyle(Palette.muted)
                         ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
@@ -285,7 +303,7 @@ struct EpisodeDetail: View {
                     }
                     Text(l("只记录触发后的声音；无法恢复波动前的对话。文字可能有误，请以原始录音和本人反馈核对。"))
                         .font(.caption).foregroundStyle(Palette.muted)
-                    if let owner = model.recordingOwner(event), (owner.status == .failed || owner.status == .partial), owner.audioName != nil {
+                    if let owner = model.recordingOwner(event), (owner.status == .failed || owner.status == .partial), owner.audioName != nil, owner.audioPurgedAt == nil {
                         Button(l("重试本地转写")) { Task { await model.retry(owner) } }.disabled(model.busy)
                     }
                 }
@@ -331,23 +349,32 @@ struct ReportView: View {
         Page {
             HStack { AvatarView(configuration: model.avatar, size: 62); Text(l("和你一起回顾今天")).font(.headline) }
             DatePicker(l("摘要日期"), selection: $model.selectedDay, displayedComponents: .date)
+            CoverageView()
+            NavigationLink(l("片段回顾与反思")) { ReflectionView() }
+            NavigationLink(l("高光与本地搜索")) { JournalLibraryView() }
             Surface {
                 Image(systemName: "sparkles").font(.largeTitle).foregroundStyle(Palette.teal)
                 Text(l("把零散的片刻，\n整理成一天的故事。")).font(.title2.weight(.medium)).lineSpacing(5)
-                Text(l("只使用当天记录。设备支持时调用 Apple 端侧模型；否则生成清楚标注的规则摘要，不切换云端。"))
+                Text(l("使用当天事件、人工标记与确认高光。端侧模型可参考启用的历史记忆，规则摘要只整理当天证据；不切换云端，不补造未采集经历。"))
                     .font(.subheadline).foregroundStyle(Palette.muted)
                 Button { Task { await model.summarize() } } label: {
                     HStack { if model.summarizing { ProgressView() }; Text(model.summarizing ? l("正在本地整理…") : l("生成每日摘要")) }.frame(maxWidth: .infinity).padding(6)
-                }.buttonStyle(.borderedProminent).disabled(model.dayEvents.isEmpty || model.summarizing || model.busy)
-                Button(l("使用规则摘要")) { model.ruleSummary() }.disabled(model.dayEvents.isEmpty || model.summarizing || model.busy)
+                }.buttonStyle(.borderedProminent).disabled(model.summaryEvidenceIDs.isEmpty || model.summarizing || model.busy)
+                Button(l("使用规则摘要")) { model.ruleSummary() }.disabled(model.summaryEvidenceIDs.isEmpty || model.summarizing || model.busy)
             }
             if let report = model.report {
                 Surface {
                     Text(l.key(report.engine)).font(.caption.bold()).foregroundStyle(Palette.teal)
                     Text(report.text).lineSpacing(7).textSelection(.enabled)
                     Divider()
-                    Text(l("基于 \(report.episodeIDs.count) 条记录 · \(l.date(report.generatedAt)) 生成"))
+                    Text(l("基于 \((report.evidenceIDs ?? report.episodeIDs).count) 条记录 · \(l.date(report.generatedAt)) 生成"))
                         .font(.caption).foregroundStyle(Palette.muted)
+                    ForEach(model.visibleMarkers.filter { Calendar.current.isDate($0.date, inSameDayAs: model.selectedDay) }) { marker in
+                        NavigationLink(l("人工标记")) { MarkerDetail(id: marker.id) }.font(.caption)
+                    }
+                    ForEach(model.visibleClips.filter { $0.confirmed && Calendar.current.isDate($0.date, inSameDayAs: model.selectedDay) }) { clip in
+                        NavigationLink(l("本人确认的高光")) { ClipDetailView(id: clip.id) }.font(.caption)
+                    }
                     ForEach(model.dayEvents) { event in
                         NavigationLink { EpisodeDetail(id: event.id) } label: {
                             Text(l("\(l.date(event.trigger.date)) · \(event.id.uuidString.prefix(8)) · 核对依据"))
@@ -355,7 +382,7 @@ struct ReportView: View {
                     }
                 }
             } else {
-                Text(model.dayEvents.isEmpty ? l("先留下一个片刻，再生成摘要。") : l("尚无当前证据的摘要，或记录已变化，请重新生成。"))
+                Text(model.summaryEvidenceIDs.isEmpty ? l("先留下一个片刻，再生成摘要。") : l("尚无当前证据的摘要，或记录已变化，请重新生成。"))
                     .foregroundStyle(Palette.muted).font(.subheadline)
             }
         }.navigationTitle(l("每日回顾"))
@@ -383,6 +410,13 @@ struct SettingsView: View {
                     HStack { AvatarView(configuration: model.avatar, size: 54); Text(model.avatar.name.isEmpty ? l("定制我的形象") : model.avatar.name) }
                 }
             }
+            Section(l("记录与回顾")) {
+                NavigationLink(l("高光与本地搜索")) { JournalLibraryView() }
+                NavigationLink(l("我的长期记忆")) { MemoriesView() }
+                NavigationLink(l("我的小调整计划")) { PlansView() }
+                NavigationLink(l("健康趋势与日常安排")) { HealthOverviewView() }
+                NavigationLink(l("音频与资源设置")) { CapturePolicySettingsView() }
+            }
             Section(l("录音与触发设置")) {
                 NavigationLink { RecordingDurationView() } label: {
                     LabeledContent(l("最长录音时间"), value: l("\(model.recordingMinutes) 分钟"))
@@ -400,7 +434,7 @@ struct SettingsView: View {
             }
             Section(l("录音与隐私")) {
                 Text(l("音频、转写和摘要保存在本机，并排除应用主动创建目录的系统备份。无账号、无广告、无分析SDK。"))
-                Text(l("当前不提供备份恢复；卸载可能丢失全部记录。原始音频不会自动过期，请定期删除。"))
+                Text(l("当前不提供备份恢复；卸载可能丢失全部记录。默认保留原始音频，可为新会话开启完整转写后的音频清理。"))
                 Text(l("现场其他人应知情同意。应用不会在未开启观察时录音，也不预先监听。"))
                 Button(l("打开系统权限设置")) { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
             }

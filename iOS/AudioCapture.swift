@@ -13,6 +13,7 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
         var segments: [TranscriptSegment]
         var failedChunks: Int
         var duration: TimeInterval
+        var spans: [(Range<Double>, ProcessingSpan.Outcome)]
     }
     private var transcriptionSlot = OperationSlot()
     private var speechTask: SFSpeechRecognitionTask?
@@ -92,7 +93,7 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
             completion(.success(CapturedAudio(url: url, duration: duration)))
         }
     }
-    func transcribe(url: URL, language: AppLanguage,
+    func transcribe(url: URL, language: AppLanguage, filterQuiet: Bool = false, sensitivity: Int = 3, protectedOffsets: [Double] = [],
                     progress: @escaping @MainActor (Int, Int) -> Void) async throws -> TranscriptionResult {
         guard recorder == nil, let operation = transcriptionSlot.begin() else { throw CaptureError.busy }
         defer { transcriptionSlot.finish(operation) }
@@ -104,7 +105,8 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
         let ranges = RecordingPolicy.chunks(duration: duration)
         guard !ranges.isEmpty else { throw CaptureError.recording }
         var text: [String] = [], segments: [TranscriptSegment] = []
-        var failures = 0, completed = 0
+        var failures = 0, completed = 0, skipped = 0
+        var spans: [(Range<Double>, ProcessingSpan.Outcome)] = []
         var lastError: Error = CaptureError.unavailable
         progress(0, ranges.count)
         for range in ranges {
@@ -116,16 +118,27 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
                     try await export(asset: asset, range: range, to: temporary)
                     input = temporary
                 }
+                let protected = protectedOffsets.contains { $0 >= range.lowerBound - 20 && $0 <= range.upperBound + 20 }
+                if filterQuiet && !protected {
+                    let quality = await Task.detached(priority: .utility) { AudioQuality.analyze(url: input, sensitivity: sensitivity) }.value
+                    if AudioEnergy.shouldSkip(quality, range: range, protectedOffsets: protectedOffsets) {
+                        skipped += 1; spans.append((range, .skipped))
+                        try? FileManager.default.removeItem(at: temporary)
+                        progress(completed + failures + skipped, ranges.count)
+                        continue
+                    }
+                }
                 let (chunkText, chunkSegments) = try await recognize(url: input, language: language)
                 text.append(chunkText)
+                spans.append((range, chunkText.isEmpty ? .empty : .recognized))
                 segments += chunkSegments.map { .init(text: $0.text, offset: $0.offset + range.lowerBound, duration: $0.duration) }
                 completed += 1
-            } catch { failures += 1; lastError = error }
+            } catch { failures += 1; lastError = error; spans.append((range, .failed)) }
             try? FileManager.default.removeItem(at: temporary)
-            progress(completed + failures, ranges.count)
+            progress(completed + failures + skipped, ranges.count)
         }
-        guard completed > 0 else { throw lastError }
-        return TranscriptionResult(text: text.joined(separator: "\n"), segments: segments, failedChunks: failures, duration: duration)
+        guard completed > 0 || skipped > 0 else { throw lastError }
+        return TranscriptionResult(text: text.joined(separator: "\n"), segments: segments, failedChunks: failures, duration: duration, spans: spans)
     }
     private func export(asset: AVURLAsset, range: Range<Double>, to url: URL) async throws {
         guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else { throw CaptureError.recording }
