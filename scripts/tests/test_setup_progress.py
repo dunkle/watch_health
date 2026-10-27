@@ -39,9 +39,12 @@ chmod +x "$FAKE_BIN/xcodegen"
                 path.write_text(source)
                 path.chmod(0o755)
             environment = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
-                               FAKE_BIN=str(tools), TEST_FAIL_STAGE=fail)
-            return subprocess.run(['bash', str(ROOT / 'scripts/setup-mac.sh')], cwd=ROOT,
-                                  env=environment, text=True, capture_output=True, timeout=35)
+                               FAKE_BIN=str(tools), TEST_FAIL_STAGE=fail,
+                               WATCHMIND_BUILD_LOG_DIR=str(tools / 'logs'))
+            result = subprocess.run(['bash', str(ROOT / 'scripts/setup-mac.sh')], cwd=ROOT,
+                                    env=environment, text=True, capture_output=True, timeout=35)
+            result.build_logs = [p.read_text() for p in (tools / 'logs').glob('*.log')]
+            return result
 
     def test_all_stages_complete(self):
         result = self.run_setup()
@@ -49,6 +52,8 @@ chmod +x "$FAKE_BIN/xcodegen"
         self.assertIn('[#####] 5/5', result.stdout)
         self.assertIn('BUILD SUCCEEDED', result.stdout)
         self.assertIn('not compiler completion', result.stdout)
+        self.assertEqual(len(result.build_logs), 1)
+        self.assertIn('BUILD SUCCEEDED', result.build_logs[0])
 
     def test_test_failure_preserves_exit_code_and_skips_native_build(self):
         result = self.run_setup(fail='tests')
@@ -62,6 +67,10 @@ chmod +x "$FAKE_BIN/xcodegen"
         self.assertEqual(result.returncode, 42)
         self.assertIn('[5/5]', result.stderr)
         self.assertNotIn('✓ 构建完成', result.stdout)
+        self.assertIn('First build error', result.stderr)
+        self.assertIn('error: fixture native failure', result.stderr)
+        self.assertEqual(len(result.build_logs), 1)
+        self.assertIn('error: fixture native failure', result.build_logs[0])
 
     def test_slow_homebrew_stage_emits_heartbeat(self):
         result = self.run_setup(install=True)

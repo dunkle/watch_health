@@ -181,7 +181,7 @@ final class AppModel: ObservableObject {
                 switch result {
                 case .success(let url): Task { await self.transcribe(id: id, url: url, operation: operation) }
                 case .failure(let error):
-                    self.modify(id) { $0.status = .failed; $0.note = describe(error) }
+                    self.modify(id) { $0.status = .failed; $0.note = self.describe(error) }
                     self.work.finish(operation)
                 }
             }

@@ -59,13 +59,33 @@ ensure_xcodegen() {
   fi
   xcodegen --version
 }
+build_native() {
+  local log_dir="${WATCHMIND_BUILD_LOG_DIR:-.build-logs}" log_file
+  mkdir -p "$log_dir" || return $?
+  log_file="$log_dir/build-$(date +%Y%m%d-%H%M%S)-$$.log"
+  printf '完整构建日志 / Full build log: %s\n' "$log_file"
+  # run_stage invokes this function in a conditional, so collect both pipeline statuses explicitly.
+  xcodebuild -project WatchMind.xcodeproj -scheme WatchMind \
+    -destination 'generic/platform=iOS Simulator' \
+    -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$log_file"
+  local command_status=("${PIPESTATUS[@]}")
+  if ((command_status[0] != 0)); then
+    printf '\n首条构建错误 / First build error:\n' >&2
+    if [[ -f "$log_file" ]]; then
+      awk '/(^|[[:space:]])(fatal )?error:/ { found=1 } found { print; count++; if (count >= 8) exit }' "$log_file" >&2
+    fi
+    printf '\n完整日志 / Full log: %s\n' "$log_file" >&2
+    return "${command_status[0]}"
+  fi
+  if ((command_status[1] != 0)); then
+    printf '无法保存完整日志 / Could not save build log: %s\n' "$log_file" >&2
+    return "${command_status[1]}"
+  fi
+}
 printf 'WatchMind · 安装与构建 / Setup & Build\n进度条表示阶段数，不是 Xcode 编译百分比。 / Progress counts stages, not compiler completion.\n'
 run_stage 1 '检查 Xcode / Check Xcode' xcodebuild -version
 run_stage 2 '准备 XcodeGen / Prepare XcodeGen (Homebrew may update)' ensure_xcodegen
 run_stage 3 '生成工程 / Generate project' xcodegen generate --spec project.yml
 run_stage 4 '运行核心测试 / Run core tests' swift test -j 4
-run_stage 5 '编译手机与手表 / Build iPhone + Watch' xcodebuild \
-  -project WatchMind.xcodeproj -scheme WatchMind \
-  -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build
+run_stage 5 '编译手机与手表 / Build iPhone + Watch' build_native
 printf '\n✓ 构建完成 / Build complete · %ss\n打开 / Open WatchMind.xcodeproj，设置两个 target 的 Team 和唯一且匹配的 Bundle ID，再安装到真机。\n' "$(($(date +%s)-BUILD_STARTED_AT))"

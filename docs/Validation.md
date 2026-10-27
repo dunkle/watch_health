@@ -47,3 +47,12 @@ CI 使用 `macos-26`，官方 runner-images 文档确认该镜像有 Xcode 26 SD
 当前38项核心测试通过（增加6项本地化回归），验证语言解析、资源实际加载、动态占位符、隐私文字不被模板二次替换、英文词间空格/否定、历史录音解码。双语资源键集合、占位符和 Localizer 调用点审计通过。
 
 Mac 构建脚本新增5阶段进度、阶段耗时、15秒心跳，保留真实命令输出和错误码。4项脚本测试在伪造工具环境中通过，覆盖成功、测试失败、编译失败与较慢 Homebrew 安装；这不代表实际 Xcode 构建成功。真实双语布局、系统权限、本地识别及 Apple 模型仍需 Mac/真机验证。
+
+
+## 2026-10-27 Mac 编译诊断修复
+
+用户的 Xcode 26.3 构建确认 AppModel.swift 的录音失败嵌套闭包隐式调用 `describe(error)` 不合法。已改为显式 `self.describe(error)`。在 Linux 使用临时 API stand-ins 的 Swift 语言级类型检查中，修复前可复现该错误，修复后该错误消失；这不是 Apple SDK 编译验证。
+
+HealthKit 查询 handler 显式声明 `@Sendable`，样本与错误回调声明为 `@MainActor @Sendable`。在跳到主 actor 前只提取 Sendable 的心率值和错误字符串，避免跨 actor 传递 SDK 样本对象。
+
+原生构建脚本通过 tee 保存 `.build-logs/` 完整输出，显式保留 xcodebuild 和 tee 的退出状态；失败时摘出首条 error。4项工具替身脚本测试通过，覆盖日志留存、错误提取和失败退出码；38项核心测试及双语检查通过。Apple SDK 整体重新编译结果仍需用户 Mac 验证。

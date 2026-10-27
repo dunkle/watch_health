@@ -39,7 +39,7 @@ cd watch_health
 open WatchMind.xcodeproj
 ```
 
-构建脚本显示5个阶段：检查 Xcode、准备 XcodeGen、生成工程、核心测试、原生编译。每阶段显示耗时；长任务每15秒显示仍在运行。进度条表示已完成阶段数，**不代表 Xcode 编译百分比**。错误输出与退出码保留，失败不会显示完成。
+构建脚本显示5个阶段：检查 Xcode、准备 XcodeGen、生成工程、核心测试、原生编译。每阶段显示耗时；长任务每15秒显示仍在运行。进度条表示已完成阶段数，**不代表 Xcode 编译百分比**。错误输出与退出码保留，失败不会显示完成。原生构建的完整输出保存在已忽略的 `.build-logs/` 目录；失败时脚本会直接摘出首条 `error:` 及附近内容。
 
 为两个 target 设置自己的 Team、唯一 Bundle ID 及匹配的 Watch companion ID，再运行到配对 iPhone 和 Watch。详细步骤与验收：[真机运行计划](docs/Device_Test_Plan.md)。没有后端、云模型或 API Key 配置。
 
