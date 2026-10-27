@@ -61,6 +61,7 @@ Linux x86_64 云环境可运行 `./scripts/setup-linux.sh` 安装经签名验证
 
 ## 文档
 
+- [Auday / 时录调研工作台（待核实资料）](docs/COMPETITOR_RESEARCH.md)
 - [完整功能文档（v0.5，持续维护）](docs/FUNCTIONAL_SPEC.md)
 - [v0.4 历史规格：长录音、曲线与多指标](docs/PRD_v0.4_MultiSignal.md)
 - [v0.3 初版目标：心率与语音](docs/PRD_v0.3_Heart_Voice.md)
