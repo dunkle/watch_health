@@ -7,6 +7,12 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
     private var recorder: AVAudioRecorder?
     private var finished: ((Result<URL, Error>) -> Void)?
     private var url: URL?
+    struct TranscriptionResult {
+        var text: String
+        var segments: [TranscriptSegment]
+        var failedChunks: Int
+    }
+    private var transcriptionSlot = OperationSlot()
     private var speechTask: SFSpeechRecognitionTask?
     private var recognizer: SFSpeechRecognizer?
     private var speechSlot = OperationSlot()
@@ -33,18 +39,19 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
         return await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0 == .authorized) } }
     }
     @discardableResult
-    func start(url: URL, completion: @escaping (Result<URL, Error>) -> Void) throws -> Date {
-        guard recorder == nil, speechSlot.current == nil else { throw CaptureError.busy }
+    func start(url: URL, maximumDuration: TimeInterval, completion: @escaping (Result<URL, Error>) -> Void) throws -> Date {
+        guard recorder == nil, speechSlot.current == nil, transcriptionSlot.current == nil else { throw CaptureError.busy }
         let audio = AVAudioSession.sharedInstance()
         do {
             try audio.setCategory(.record, mode: .measurement, options: [])
             try audio.setActive(true)
             let r = try AVAudioRecorder(url: url, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC,
-                 AVSampleRateKey: 44100, AVNumberOfChannelsKey: 1, AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue])
+                 AVSampleRateKey: 44100, AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64000, AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue])
             r.delegate = self
             recorder = r; self.url = url; finished = completion
+            guard r.prepareToRecord() else { throw CaptureError.recording }
             let startedAt = Date()
-            guard r.prepareToRecord(), r.record(forDuration: 30) else { throw CaptureError.recording }
+            guard r.record(forDuration: min(180 * 60, max(60, maximumDuration))) else { throw CaptureError.recording }
             return startedAt
         } catch {
             recorder?.delegate = nil; recorder?.stop()
@@ -77,7 +84,54 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         if let error { completion(.failure(error)) } else { completion(.success(url)) }
     }
-    func transcribe(url: URL, language: AppLanguage) async throws -> (String, [TranscriptSegment]) {
+    func transcribe(url: URL, language: AppLanguage,
+                    progress: @escaping @MainActor (Int, Int) -> Void) async throws -> TranscriptionResult {
+        guard recorder == nil, let operation = transcriptionSlot.begin() else { throw CaptureError.busy }
+        defer { transcriptionSlot.finish(operation) }
+        let asset = AVURLAsset(url: url)
+        guard let support = SFSpeechRecognizer(locale: Locale(identifier: language.speechLocaleIdentifier)),
+              support.isAvailable, support.supportsOnDeviceRecognition else { throw CaptureError.unavailable }
+        let time = try await asset.load(.duration)
+        let duration = time.seconds
+        let ranges = RecordingPolicy.chunks(duration: duration)
+        guard !ranges.isEmpty else { throw CaptureError.recording }
+        var text: [String] = [], segments: [TranscriptSegment] = []
+        var failures = 0, completed = 0
+        var lastError: Error = CaptureError.unavailable
+        progress(0, ranges.count)
+        for range in ranges {
+            let temporary = url.deletingLastPathComponent().appendingPathComponent("chunk-" + UUID().uuidString + ".m4a")
+            do {
+                let input: URL
+                if ranges.count == 1 { input = url }
+                else {
+                    try await export(asset: asset, range: range, to: temporary)
+                    input = temporary
+                }
+                let (chunkText, chunkSegments) = try await recognize(url: input, language: language)
+                text.append(chunkText)
+                segments += chunkSegments.map { .init(text: $0.text, offset: $0.offset + range.lowerBound, duration: $0.duration) }
+                completed += 1
+            } catch { failures += 1; lastError = error }
+            try? FileManager.default.removeItem(at: temporary)
+            progress(completed + failures, ranges.count)
+        }
+        guard completed > 0 else { throw lastError }
+        return TranscriptionResult(text: text.joined(separator: "\n"), segments: segments, failedChunks: failures)
+    }
+    private func export(asset: AVURLAsset, range: Range<Double>, to url: URL) async throws {
+        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else { throw CaptureError.recording }
+        session.outputURL = url; session.outputFileType = .m4a
+        session.timeRange = CMTimeRange(start: CMTime(seconds: range.lowerBound, preferredTimescale: 600),
+                                       duration: CMTime(seconds: range.upperBound - range.lowerBound, preferredTimescale: 600))
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            session.exportAsynchronously {
+                if session.status == .completed { continuation.resume() }
+                else { continuation.resume(throwing: session.error ?? CaptureError.recording) }
+            }
+        }
+    }
+    private func recognize(url: URL, language: AppLanguage) async throws -> (String, [TranscriptSegment]) {
         guard recorder == nil, let id = speechSlot.begin() else { throw CaptureError.busy }
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language.speechLocaleIdentifier)),
               recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
@@ -101,7 +155,7 @@ final class AudioCapture: NSObject, AVAudioRecorderDelegate {
                 }
             }
             deadline = Task { [weak self] in
-                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                do { try await Task.sleep(for: .seconds(90)) } catch { return }
                 self?.completeSpeech(id, .failure(CaptureError.timeout))
             }
         }

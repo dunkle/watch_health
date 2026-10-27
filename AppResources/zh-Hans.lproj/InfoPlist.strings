@@ -1,4 +1,4 @@
-"NSHealthShareUsageDescription" = "读取心率，仅在你开启观察时识别波动并邀请回顾，不用于医疗诊断。";
+"NSHealthShareUsageDescription" = "读取心率、血氧、HRV、步数、音暴露、睡眠、活动能量和睡眠腕温，为事件记录提供情境，不用于医疗诊断。";
 "NSHealthUpdateUsageDescription" = "将你主动开始的运动会话保存到健康。";
-"NSMicrophoneUsageDescription" = "在你授权并开启观察后，心率波动触发最长30秒录音，语音仅保存在本机。";
+"NSMicrophoneUsageDescription" = "在你授权并开启观察后，心率变化触发录音，最长时长由你设置（默认60分钟），语音仅保存在本机。";
 "NSSpeechRecognitionUsageDescription" = "在本机将你同意录制的语音转成文字；设备不支持离线转写时不会切换到云端。";

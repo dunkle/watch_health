@@ -35,15 +35,22 @@ public enum Insights {
     public static func events(on day: Date, from all: [Episode], calendar: Calendar = .current) -> [Episode] {
         all.filter { calendar.isDate($0.trigger.date, inSameDayAs: day) }.sorted { $0.trigger.date < $1.trigger.date }
     }
-    public static func report(day: Date, events: [Episode], language: AppLanguage = .simplifiedChinese) -> DailyReport {
+    public static func voiceContext(for event: Episode, events: [Episode]) -> String {
+        let pieces = event.contextSegments(in: events)
+        if !pieces.isEmpty { return pieces.map(\.text).joined(separator: " ") }
+        // Legacy short recordings may not have word timestamps; never pretend a linked marker is aligned.
+        return event.linkedRecordingID == nil && event.segments.isEmpty ? event.transcript : ""
+    }
+    public static func report(day: Date, events: [Episode], language: AppLanguage = .simplifiedChinese, recordings: [Episode]? = nil) -> DailyReport {
+        let universe = recordings ?? events
         let l = Localizer(language: language)
-        let ready = events.filter { $0.status == .ready && !$0.transcript.isEmpty }
+        let available = events.filter { !voiceContext(for: $0, events: universe).isEmpty }
         let feelings = events.compactMap(\.feeling).map { l.key($0) }
-        let contexts = ready.map { "• \($0.transcript)" }.joined(separator: "\n")
-        let text = l("今天记录了 \(events.count) 次心率波动，其中 \(ready.count) 次有可用语音。\n")
+        let contexts = available.map { "• " + l.date($0.trigger.date) + " · " + voiceContext(for: $0, events: universe) }.joined(separator: "\n")
+        let text = l("今天记录了 \(events.count) 次心率波动，其中 \(available.count) 次有可用语音。\n")
             + (feelings.isEmpty ? l("尚无本人确认的感受，不能据此判断心情。") : l("本人标记的感受：\(feelings.joined(separator: l("、")))。"))
             + (contexts.isEmpty ? l("\n暂无可总结的语音上下文。") : l("\n语音回顾：\n\(contexts)"))
-            + l("\n这些记录只覆盖触发后的短片段；运动、环境和谈话都可能伴随心率变化，不能确定因果。")
+            + l("\n摘要仅使用各标记附近20秒窗口内的文字；原始音频与完整转写仍保留在本机。心率不证明情绪或因果。")
         return DailyReport(day: day, text: text, engine: l("本地规则摘要（非大模型）"), episodeIDs: events.map(\.id), language: l.language.rawValue)
     }
 }

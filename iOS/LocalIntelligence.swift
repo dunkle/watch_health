@@ -5,18 +5,19 @@ import FoundationModels
 #endif
 
 enum LocalIntelligence {
-    static func summarize(day: Date, events: [Episode], language: AppLanguage) async throws -> DailyReport {
+    static func summarize(day: Date, events: [Episode], language: AppLanguage, recordings: [Episode]) async throws -> DailyReport {
         let l = Localizer(language: language)
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *), case .available = SystemLanguageModel.default.availability, !events.isEmpty {
             var evidence: [String] = []
             for event in events {
                 let metadata = "Entry ID: \(event.id). Heart rate: \(Int(event.trigger.bpm)) bpm; recent median: \(Int(event.trigger.baseline)). User-confirmed feeling: \(event.feeling.map { l.key($0) } ?? "unknown"). "
-                var remaining = event.transcript
-                if remaining.isEmpty { evidence.append(metadata + "No voice context was captured.") }
+                let context = event.assessment.map { " Non-medical salience: \(Int($0.score))/100, weight coverage: \(Int($0.coverage * 100))%, movement context: \($0.activeMovement)." } ?? ""
+                var remaining = Insights.voiceContext(for: event, events: recordings)
+                if remaining.isEmpty { evidence.append(metadata + context + "No voice context was captured.") }
                 while !remaining.isEmpty {
                     let piece = String(remaining.prefix(350)); remaining.removeFirst(piece.count)
-                    evidence.append(metadata + "Incomplete post-trigger transcript: " + piece)
+                    evidence.append(metadata + context + "Transcript near this event marker: " + piece)
                 }
             }
             var summaries: [String] = []
@@ -33,7 +34,7 @@ enum LocalIntelligence {
             return DailyReport(day: day, text: summaries[0], engine: l("Apple 端侧模型 · 分批整理全部记录 · 待核对"), episodeIDs: events.map(\.id), language: l.language.rawValue)
         }
         #endif
-        return Insights.report(day: day, events: events, language: l.language)
+        return Insights.report(day: day, events: events, language: l.language, recordings: recordings)
     }
     #if canImport(FoundationModels)
     @available(iOS 26.0, *)

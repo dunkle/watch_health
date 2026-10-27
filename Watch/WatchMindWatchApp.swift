@@ -27,6 +27,7 @@ final class WatchModel: NSObject, ObservableObject, HKWorkoutSessionDelegate, HK
     private var workout: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private var detector = HeartDetector()
+    private var largeDetector = HeartDetector.largeChanges()
     override init() {
         super.init()
         if WCSession.isSupported() { WCSession.default.delegate = self; WCSession.default.activate() }
@@ -45,7 +46,7 @@ final class WatchModel: NSObject, ObservableObject, HKWorkoutSessionDelegate, HK
             let live = session.associatedWorkoutBuilder()
             live.dataSource = HKLiveWorkoutDataSource(healthStore: health, workoutConfiguration: configuration)
             session.delegate = self; live.delegate = self
-            workout = session; builder = live; detector.reset()
+            workout = session; builder = live; detector.reset(); largeDetector.reset()
             let start = Date(); session.startActivity(with: start)
             try await live.beginCollection(at: start)
             guard workout === session, lifecycle.started(id) else { return }
@@ -114,7 +115,8 @@ final class WatchModel: NSObject, ObservableObject, HKWorkoutSessionDelegate, HK
         if session.activationState == .activated, session.isReachable {
             session.sendMessage(["bpm": sample.bpm, "time": sample.date.timeIntervalSince1970], replyHandler: nil)
         }
-        guard let trigger = detector.ingest(sample), let data = try? JSONEncoder().encode(trigger) else { return }
+        let small = detector.ingest(sample), large = largeDetector.ingest(sample)
+        guard let trigger = large ?? small, let data = try? JSONEncoder().encode(trigger) else { return }
         WKInterfaceDevice.current().play(.notification)
         status = "发现波动 · 手机决定是否录音"
         guard session.activationState == .activated else { status = "未连接手机 · 未触发录音"; return }

@@ -16,7 +16,7 @@ public struct CaptureGate: Sendable {
               trigger.bpm.isFinite, trigger.baseline.isFinite,
               (30...240).contains(trigger.bpm), (30...240).contains(trigger.baseline),
               trigger.date.timeIntervalSince(now) <= 5 else { return .ignore }
-        if let latestAccepted, trigger.date.timeIntervalSince(latestAccepted) < 180 { return .ignore }
+        if let latestAccepted, trigger.date.timeIntervalSince(latestAccepted) < 30 { return .ignore }
         latestAccepted = trigger.date
         guard now.timeIntervalSince(trigger.date) <= 15 else { return .missed("事件延迟到达，未补录当时的语音。") }
         guard foreground else { return .missed("手机不在前台，未自动启动麦克风。") }

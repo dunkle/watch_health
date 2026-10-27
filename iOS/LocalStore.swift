@@ -1,11 +1,7 @@
 import Foundation
 import WatchMindCore
 
-struct Archive: Codable {
-    var version = 1
-    var episodes: [Episode] = []
-    var reports: [DailyReport] = []
-}
+typealias Archive = JournalArchive
 
 final class LocalStore {
     let directory: URL
@@ -18,6 +14,10 @@ final class LocalStore {
         var resource = URLResourceValues(); resource.isExcludedFromBackup = true
         var folder = directory; try folder.setResourceValues(resource)
         file = directory.appendingPathComponent("archive.json")
+        for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            where url.lastPathComponent.hasPrefix("chunk-") && url.pathExtension == "m4a" {
+            try FileManager.default.removeItem(at: url)
+        }
     }
     func load() throws -> Archive {
         let data: Data

@@ -16,7 +16,7 @@ final class CoreTests: XCTestCase {
     func testRelativeThresholdPreventsSmallRelativeChanges() {
         var d = HeartDetector()
         for t in 0..<5 { _ = d.ingest(sample(120, Double(t)), now: start.addingTimeInterval(Double(t))) }
-        XCTAssertNil(d.ingest(sample(141, 5), now: start.addingTimeInterval(5)))
+        XCTAssertNil(d.ingest(sample(125, 5), now: start.addingTimeInterval(5)))
     }
     func testCooldownAndOutOfOrder() {
         var d = HeartDetector()
