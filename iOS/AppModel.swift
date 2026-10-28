@@ -45,6 +45,13 @@ final class AppModel: ObservableObject {
     @Published var episodes: [Episode] = []
     @Published var markers: [MomentMarker] = []
     @Published var journal = JournalCollection()
+    @Published var aiReviews: [AIReviewRecord] = []
+    @Published var contextMetricKinds: [MetricKind] = {
+        guard let saved = UserDefaults.standard.stringArray(forKey: "contextMetricKinds") else { return MetricKind.allCases }
+        return saved.compactMap(MetricKind.init(rawValue:))
+    }() {
+        didSet { UserDefaults.standard.set(contextMetricKinds.map(\.rawValue), forKey: "contextMetricKinds") }
+    }
     @Published var cleanupNewRecordings = UserDefaults.standard.bool(forKey: "cleanupNewRecordings") {
         didSet { UserDefaults.standard.set(cleanupNewRecordings, forKey: "cleanupNewRecordings") }
     }
@@ -91,6 +98,7 @@ final class AppModel: ObservableObject {
     private var contextRefresh = OperationSlot()
     private var lastContextRefresh = Date.distantPast
     private var player: AVAudioPlayer?
+    private var playbackDeadline: Task<Void, Never>?
     private var observationStart: Date?
     private var captureGate = CaptureGate()
     private var starts = OperationSlot()
@@ -159,7 +167,7 @@ final class AppModel: ObservableObject {
             Task { @MainActor in self?.resumeStorage(); self?.resumeRecording(automatic: true) }
         })
     }
-    deinit { recordingDeadline?.cancel(); notificationTokens.forEach { NotificationCenter.default.removeObserver($0) } }
+    deinit { playbackDeadline?.cancel(); recordingDeadline?.cancel(); notificationTokens.forEach { NotificationCenter.default.removeObserver($0) } }
 
     /// Retain dirty state in memory while locked. Never replace an unreadable archive with an empty one.
     private func resumeStorage() {
@@ -172,6 +180,7 @@ final class AppModel: ObservableObject {
                 let archive = try store.load()
                 self.store = store; episodes = archive.episodes; reports = archive.reports
                 markers = archive.markers.filter { $0.owner(in: archive.episodes) != nil }
+                aiReviews = archive.reviews
                 journal = archive.journal; journal.reconcile(episodes: episodes)
                 for i in journal.observations.indices where journal.observations[i].end == nil {
                     journal.observations[i].end = journal.observations[i].lastKnownAt
@@ -201,7 +210,7 @@ final class AppModel: ObservableObject {
         revision += 1
         guard writable, archiveLoaded, let store else { return false }
         do {
-            let persisted = try archiveWriter.save(Archive(episodes: episodes, reports: reports, heartPoints: heartPoints, metrics: metrics, markers: markers, journal: journal),
+            let persisted = try archiveWriter.save(Archive(episodes: episodes, reports: reports, heartPoints: heartPoints, metrics: metrics, markers: markers, journal: journal, reviews: aiReviews),
                 isAvailable: { UIApplication.shared.isProtectedDataAvailable }, write: store.save)
             storagePaused = !persisted
             return persisted
@@ -268,7 +277,7 @@ final class AppModel: ObservableObject {
         guard observing, !demoMode, writable, !episodes.contains(where: { $0.id == trigger.id }) else { return }
         guard !episodes.contains(where: { !$0.isDemo && abs($0.trigger.date.timeIntervalSince(trigger.date)) < 2 && abs($0.trigger.bpm - trigger.bpm) < 1 }) else { return }
         appendHeart(.init(date: trigger.date, bpm: trigger.bpm), baseline: trigger.baseline, force: true)
-        let assessment = ContextAlgorithm.assess(trigger, readings: metrics)
+        let assessment = ContextAlgorithm.assess(trigger, readings: metrics.filter { contextMetricKinds.contains($0.kind) })
         let important = trigger.isLargeChange || (assessment.score >= 65 && assessment.coverage >= 0.8)
         if let owner = currentRecording, important, let start = owner.captureStarted, trigger.date >= start {
             var marker = Episode(trigger: trigger, status: .linked, note: "重要变化已关联到同一段录音。")
@@ -609,10 +618,10 @@ final class AppModel: ObservableObject {
         guard recordingID == nil, episodes.first(where: { $0.id == eventID })?.audioPurgedAt == nil, episodes.first(where: { $0.id == eventID })?.cleanupPending != true else { return }
         playAudio(AudioLocation(audioName: part.audioName, offset: 0), eventID: eventID)
     }
-    private func playAudio(_ location: AudioLocation, eventID: UUID) {
+    private func playAudio(_ location: AudioLocation, eventID: UUID, maximumDuration: TimeInterval? = nil) {
         guard let store else { return }
         do {
-            player?.stop(); playingID = nil
+            playbackDeadline?.cancel(); player?.stop(); playingID = nil
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
             try AVAudioSession.sharedInstance().setActive(true)
             let next = try AVAudioPlayer(contentsOf: store.directory.appendingPathComponent(location.audioName))
@@ -622,7 +631,60 @@ final class AppModel: ObservableObject {
             next.currentTime = location.offset
             guard next.play() else { throw AudioCapture.CaptureError.recording }
             player = next; playingID = eventID
+            let duration = min(next.duration - location.offset, maximumDuration ?? next.duration)
+            playbackDeadline = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(max(0, duration) * 1_000_000_000))
+                guard !Task.isCancelled, let self, self.playingID == eventID else { return }
+                self.player?.stop(); self.playingID = nil
+            }
         } catch { self.error = describe(error) }
+    }
+    /// Audition one real continuous part only. Stop at the chosen end or first recording gap.
+    func previewReview(_ evidence: AIReviewEvidence, playbackID: UUID) {
+        if playingID == playbackID { player?.stop(); playingID = nil; playbackDeadline?.cancel(); return }
+        guard recordingID == nil, !evidence.isDemo, let ownerID = evidence.selection.recordingID,
+              let owner = visible.first(where: { $0.id == ownerID }), owner.cleanupPending != true,
+              let window = evidence.audioWindows.first,
+              let location = RecordingTimeline.location(at: window.start, in: owner) else { return }
+        playAudio(location, eventID: playbackID, maximumDuration: window.end.timeIntervalSince(window.start))
+    }
+    var visibleAIReviews: [AIReviewRecord] { aiReviews.filter { $0.evidence.isDemo == demoMode }.sorted { $0.createdAt > $1.createdAt } }
+    @discardableResult func saveAIReview(_ record: AIReviewRecord) -> Bool {
+        guard canWriteArchive, record.evidence.isDemo == demoMode else { return false }
+        if aiReviews.contains(where: { $0.id == record.id }) { return save() }
+        guard aiReviews.count < 200,
+              !record.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              record.text.count <= 12000 else { return false }
+        if let id = record.evidence.selection.recordingID, !visible.contains(where: { $0.id == id }) { return false }
+        guard let current = try? AIReviewEvidence.build(selection: record.evidence.selection, episodes: visible,
+            heartPoints: heartPoints, metrics: visibleMetrics, isDemo: demoMode, now: record.evidence.createdAt),
+            (try? current.preview) == (try? record.evidence.preview) else { return false }
+        aiReviews.append(record); return save()
+    }
+    func deleteAIReview(_ id: UUID) {
+        guard canWriteArchive else { return }; aiReviews.removeAll { $0.id == id }; save()
+    }
+    func storageUsage() throws -> (archive: Int64, audio: Int64) {
+        guard let store, canWriteArchive else { throw CocoaError(.fileReadNoPermission) }
+        var archive: Int64 = 0, audio: Int64 = 0
+        for url in try FileManager.default.contentsOfDirectory(at: store.directory, includingPropertiesForKeys: [.fileSizeKey]) {
+            let size = Int64(try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
+            if url.lastPathComponent == "archive.json" { archive += size }
+            else if url.pathExtension == "m4a" { audio += size }
+        }
+        return (archive, audio)
+    }
+    func exportTextArchive() throws -> Data {
+        guard canWriteArchive else { throw CocoaError(.fileReadNoPermission) }
+        var exported = journal
+        exported.clips.removeAll { $0.isDemo }; exported.people.removeAll { $0.isDemo }; exported.memories.removeAll { $0.isDemo }
+        exported.reflections.removeAll { $0.isDemo }; exported.plans.removeAll { $0.isDemo }
+        let owners = Set(episodes.filter { !$0.isDemo }.map(\.id))
+        exported.processing.removeAll { !owners.contains($0.recordingID) }
+        let evidenceIDs = owners.union(markers.filter { !$0.isDemo }.map(\.id)).union(exported.clips.map(\.id))
+        return try JSONEncoder().encode(Archive(episodes: episodes.filter { !$0.isDemo },
+            reports: reports.filter { !($0.evidenceIDs ?? $0.episodeIDs).isEmpty && Set($0.evidenceIDs ?? $0.episodeIDs).isSubset(of: evidenceIDs) },
+            heartPoints: heartPoints.filter { !$0.isDemo }, metrics: metrics, markers: markers.filter { !$0.isDemo }, journal: exported, reviews: aiReviews.filter { !$0.evidence.isDemo }))
     }
     func delete(_ event: Episode) {
         guard !busy, writable, !storagePaused, archiveLoaded else { return }
@@ -630,6 +692,7 @@ final class AppModel: ObservableObject {
             for name in event.audioNames { try store?.deleteAudio(name) }
             player?.stop(); playingID = nil
             episodes.removeAll { $0.id == event.id || $0.linkedRecordingID == event.id }
+            aiReviews.removeAll { $0.evidence.selection.recordingID == event.id }
             markers.removeAll { $0.recordingID == event.id }; journal.reconcile(episodes: episodes); reports = []; save()
         } catch { self.error = l("删除音频失败：\(describe(error))") }
     }
@@ -638,7 +701,7 @@ final class AppModel: ObservableObject {
         stop(); contextRefresh.cancel(); refreshingMetrics = false; player?.stop(); playingID = nil
         do {
             for event in episodes { for name in event.audioNames { try store?.deleteAudio(name) } }
-            episodes = []; markers = []; journal = JournalCollection(); lastMarkedID = nil; reports = []; heartPoints = []; metrics = []; demoMetrics = []; save()
+            aiReviews = []; episodes = []; markers = []; journal = JournalCollection(); lastMarkedID = nil; reports = []; heartPoints = []; metrics = []; demoMetrics = []; save()
         } catch { self.error = l("清除未完成：\(describe(error))") }
     }
     func summarize() async {
@@ -668,8 +731,9 @@ final class AppModel: ObservableObject {
     }
     func loadDemo() {
         guard !busy, archiveLoaded else { return }
+        playbackDeadline?.cancel(); player?.stop(); playingID = nil
         stop(); contextRefresh.cancel(); refreshingMetrics = false; demoMode = true; selectedDay = Date()
-        episodes.removeAll(where: { $0.isDemo }); markers.removeAll { $0.isDemo }; heartPoints.removeAll { $0.isDemo }
+        aiReviews.removeAll { $0.evidence.isDemo }; episodes.removeAll(where: { $0.isDemo }); markers.removeAll { $0.isDemo }; heartPoints.removeAll { $0.isDemo }
         journal.clips.removeAll { $0.isDemo }; journal.people.removeAll { $0.isDemo }; journal.memories.removeAll { $0.isDemo }
         journal.reflections.removeAll { $0.isDemo }; journal.plans.removeAll { $0.isDemo }
         demoMetrics = MetricKind.allCases.enumerated().map { index, kind in
@@ -697,5 +761,5 @@ final class AppModel: ObservableObject {
         heartPoints.sort { $0.sample.date < $1.sample.date }
         reports = []; summaryFailure = nil; summaryDay = nil; save()
     }
-    func exitDemo() { demoMode = false; selectedDay = Date(); reports = []; summaryFailure = nil; summaryDay = nil; save() }
+    func exitDemo() { playbackDeadline?.cancel(); player?.stop(); playingID = nil; demoMode = false; selectedDay = Date(); reports = []; summaryFailure = nil; summaryDay = nil; save() }
 }

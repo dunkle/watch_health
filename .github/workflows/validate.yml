@@ -24,6 +24,8 @@ jobs:
         run: |
           swift test -j 4
           python3 scripts/tests/check-appmodel.py
+          python3 scripts/tests/check-ai-transport.py
+          python3 -m unittest discover -s server
       - name: Generate Xcode project
         run: |
           brew install xcodegen

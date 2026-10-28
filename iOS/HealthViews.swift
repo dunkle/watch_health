@@ -77,9 +77,21 @@ struct HealthMetricsView: View {
                 Text(l("健康数据读取不启动麦克风。无可读样本可能源于权限、设备、地区、佩戴或同步延迟，不能判断为正常值。"))
                     .font(.caption)
             }
-            Section(l("最新可读指标")) {
-                ForEach(MetricKind.allCases, id: \.self) { kind in
-                    MetricRow(kind: kind, reading: ContextAlgorithm.latest(kind, in: model.visibleMetrics, at: Date()), at: Date())
+            ForEach(HealthCategory.allCases, id: \.self) { category in
+                Section {
+                    Text(l.key(category.summary)).font(.caption).foregroundStyle(.secondary)
+                    if category.includesHeart {
+                        NavigationLink {
+                            HeartCurveView(day: model.selectedDay).padding().navigationTitle(l("心率波动曲线"))
+                        } label: {
+                            Label(l("心率波动曲线"), systemImage: "waveform.path.ecg")
+                        }
+                    }
+                    ForEach(category.metricKinds, id: \.self) { kind in
+                        MetricRow(kind: kind, reading: ContextAlgorithm.latest(kind, in: model.visibleMetrics, at: Date()), at: Date())
+                    }
+                } header: {
+                    Label(l.key(category.title), systemImage: category.symbol)
                 }
             }
             Section(l("算法说明")) {

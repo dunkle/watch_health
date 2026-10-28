@@ -7,11 +7,12 @@ public struct JournalArchive: Codable {
     public var heartPoints: [HeartPoint]
     public var metrics: [MetricReading]
     public var markers: [MomentMarker]
+    public var reviews: [AIReviewRecord]
     public var journal: JournalCollection
-    public init(episodes: [Episode] = [], reports: [DailyReport] = [], heartPoints: [HeartPoint] = [], metrics: [MetricReading] = [], markers: [MomentMarker] = [], journal: JournalCollection = .init()) {
-        self.episodes = episodes; self.reports = reports; self.heartPoints = heartPoints; self.metrics = metrics; self.markers = markers; self.journal = journal
+    public init(episodes: [Episode] = [], reports: [DailyReport] = [], heartPoints: [HeartPoint] = [], metrics: [MetricReading] = [], markers: [MomentMarker] = [], journal: JournalCollection = .init(), reviews: [AIReviewRecord] = []) {
+        self.episodes = episodes; self.reports = reports; self.heartPoints = heartPoints; self.metrics = metrics; self.markers = markers; self.journal = journal; self.reviews = reviews
     }
-    enum CodingKeys: String, CodingKey { case version, episodes, reports, heartPoints, metrics, markers, journal }
+    enum CodingKeys: String, CodingKey { case version, episodes, reports, heartPoints, metrics, markers, journal, reviews }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         version = try values.decode(Int.self, forKey: .version)
@@ -20,6 +21,7 @@ public struct JournalArchive: Codable {
         heartPoints = try values.decodeIfPresent([HeartPoint].self, forKey: .heartPoints) ?? []
         metrics = try values.decodeIfPresent([MetricReading].self, forKey: .metrics) ?? []
         markers = try values.decodeIfPresent([MomentMarker].self, forKey: .markers) ?? []
+        reviews = try values.decodeIfPresent([AIReviewRecord].self, forKey: .reviews) ?? []
         journal = try values.decodeIfPresent(JournalCollection.self, forKey: .journal) ?? .init()
     }
 }

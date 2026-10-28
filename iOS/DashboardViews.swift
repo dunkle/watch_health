@@ -214,7 +214,7 @@ struct ObservationHero: View {
                         Button(l("结束观察")) { model.stop() }.frame(minHeight: 44)
                     }.font(.caption).foregroundStyle(AppTheme.muted)
                 } else {
-                    Text(l("变化触发 · 原话可查 · 本机处理")).font(.caption).foregroundStyle(AppTheme.muted)
+                    Text(l("变化触发 · 原话可查 · 默认本机处理")).font(.caption).foregroundStyle(AppTheme.muted)
                 }
             }
         }
@@ -223,7 +223,7 @@ struct ObservationHero: View {
         StatusPill(text: model.demoMode ? l("模拟体验") : model.recordingPaused ? l("录音已暂停") : model.recordingID != nil ? l("正在录音") : model.observing ? l("观察已开启") : l("由你决定何时开始"),
                    icon: model.recordingID != nil ? "mic.fill" : "leaf", color: model.recordingID != nil ? AppTheme.recording : AppTheme.accent)
     }
-    private var privacy: some View { Label(l("留在本机"), systemImage: "lock.fill").font(.caption).foregroundStyle(AppTheme.muted) }
+    private var privacy: some View { Label(l("默认留在本机"), systemImage: "lock.fill").font(.caption).foregroundStyle(AppTheme.muted) }
     @ViewBuilder private var action: some View {
         if !model.canWriteArchive {
             NavigationLink { ProcessingCenterView() } label: { Label(l("检查本地档案"), systemImage: "externaldrive.badge.exclamationmark") }.buttonStyle(PrimaryActionStyle())

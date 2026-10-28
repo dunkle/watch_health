@@ -23,6 +23,27 @@ import WatchMindCore
         NotificationCenter.default.post(name: name, object: nil, userInfo: info)
         await settle()
     }
+    @MainActor static func reviewOwner(demo: Bool = false) -> Episode {
+        let date = Date().addingTimeInterval(-120)
+        var owner = Episode(trigger: .init(date: date, bpm: 95, baseline: 70), status: .ready, isDemo: demo)
+        owner.captureStarted = date; owner.captureEnded = date.addingTimeInterval(60); owner.audioName = "review-\(owner.id).m4a"
+        owner.recordingParts = [.init(audioName: owner.audioName!, startedAt: date, endedAt: date.addingTimeInterval(60))]
+        owner.segments = [.init(text: demo ? "SIMULATED QUOTE" : "selected real quotation", offset: 10, duration: 5)]
+        owner.transcript = owner.segments[0].text
+        return owner
+    }
+    @MainActor static func reviewModel(owners: [Episode], metrics: [MetricReading] = []) -> AppModel {
+        LocalStore.archive = Archive(episodes: owners, metrics: metrics)
+        LocalStore.failSave = false; LocalStore.failDelete = false; LocalStore.deletedNames = []
+        UIApplication.shared.isProtectedDataAvailable = true
+        return AppModel()
+    }
+    @MainActor static func reviewRecord(_ owner: Episode) throws -> AIReviewRecord {
+        let selection = AIReviewSelection(recordingID: owner.id, start: owner.captureStarted!.addingTimeInterval(5),
+                                          end: owner.captureStarted!.addingTimeInterval(20), includeHeart: false)
+        let evidence = try AIReviewEvidence.build(selection: selection, episodes: [owner], heartPoints: [], metrics: [], isDemo: owner.isDemo)
+        return .init(evidence: evidence, goal: .combined, text: "Tentative reading of the selected evidence", provider: .apple, model: "system", language: "en")
+    }
     @MainActor static func main() async {
         // Use an isolated defaults suite to avoid personal preferences changing test behavior.
         defer { ScenarioDefaults.store.removePersistentDomain(forName: ScenarioDefaults.name) }
@@ -332,6 +353,85 @@ import WatchMindCore
             precondition(model.episodes.first!.audioPurgedAt == nil)
             model.stop()
             print("PASS: pending cleanup can be cancelled before file deletion starts")
+        }
+        do {
+            let owner = reviewOwner(), model = reviewModel(owners: [])
+            model.episodes = [owner]
+            let record = try! reviewRecord(owner)
+            precondition(model.saveAIReview(record))
+            precondition(LocalStore.archive.reviews.first?.id == record.id)
+            // Exercise the real archive Codable boundary as well as the stand-in persistence callback.
+            LocalStore.archive = try! JSONDecoder().decode(Archive.self, from: JSONEncoder().encode(LocalStore.archive))
+            let restored = AppModel()
+            precondition(restored.visibleAIReviews.first?.evidence.transcript.first?.text == "selected real quotation")
+            precondition(restored.visibleAIReviews.first?.id == record.id)
+            restored.deleteAIReview(record.id)
+            precondition(restored.aiReviews.isEmpty && LocalStore.archive.reviews.isEmpty)
+            model.stop(); restored.stop()
+            print("PASS: selected-evidence AI review survives archive roundtrip and individual deletion persists")
+        }
+        do {
+            let owner = reviewOwner(), model = reviewModel(owners: [])
+            model.episodes = [owner]
+            let record = try! reviewRecord(owner)
+            precondition(model.saveAIReview(record))
+            model.delete(owner)
+            precondition(model.aiReviews.isEmpty && LocalStore.archive.reviews.isEmpty && model.episodes.isEmpty)
+            precondition(!model.saveAIReview(record), "An in-flight result cannot resurrect a deleted source")
+            model.stop()
+            print("PASS: source deletion removes associated AI snapshots and rejects late results")
+        }
+        do {
+            let real = reviewOwner(), demo = reviewOwner(demo: true), model = reviewModel(owners: [])
+            model.episodes = [real, demo]
+            let realRecord = try! reviewRecord(real), demoRecord = try! reviewRecord(demo)
+            ScenarioDefaults.store.set("DO_NOT_EXPORT_THIS_KEY", forKey: "apiKey")
+            precondition(model.saveAIReview(realRecord))
+            precondition(!model.saveAIReview(demoRecord))
+            model.demoMode = true
+            precondition(model.saveAIReview(demoRecord))
+            precondition(model.visibleAIReviews.map(\.id) == [demoRecord.id])
+            precondition(!model.saveAIReview(realRecord))
+            let data = try! model.exportTextArchive()
+            let archive = try! JSONDecoder().decode(Archive.self, from: data)
+            precondition(archive.reviews.map(\.id) == [realRecord.id] && archive.episodes.map(\.id) == [real.id])
+            let text = String(decoding: data, as: UTF8.self)
+            precondition(!text.contains("SIMULATED QUOTE") && !text.contains("DO_NOT_EXPORT_THIS_KEY") && !text.contains("apiKey"))
+            model.demoMode = false
+            precondition(model.visibleAIReviews.map(\.id) == [realRecord.id])
+            model.stop()
+            print("PASS: real/demo AI reviews stay isolated and text export excludes simulated evidence and settings secrets")
+        }
+        do {
+            let date = Date().addingTimeInterval(-120)
+            let reading = MetricReading(kind: .hrv, value: 45, date: date, source: "Watch")
+            let model = reviewModel(owners: [], metrics: [reading])
+            let selection = AIReviewSelection(start: date, end: date.addingTimeInterval(60), includeTranscript: false, includeHeart: false, metricKinds: [.hrv])
+            let evidence = try! AIReviewEvidence.build(selection: selection, episodes: [], heartPoints: [], metrics: model.metrics, isDemo: false)
+            let record = AIReviewRecord(evidence: evidence, goal: .body, text: "No definite emotional conclusion", provider: .apple, model: "system", language: "en")
+            precondition(model.saveAIReview(record))
+            model.erase()
+            precondition(model.aiReviews.isEmpty && model.metrics.isEmpty && LocalStore.archive.reviews.isEmpty)
+            precondition(!model.saveAIReview(record), "Erase must also reject a pending health-only result")
+            model.stop()
+            print("PASS: health-only AI review persists and complete erase rejects pending results without recording IDs")
+        }
+        do {
+            let owner = reviewOwner(), model = reviewModel(owners: [])
+            model.episodes = [owner]
+            let record = try! reviewRecord(owner)
+            model.episodes[0].segments[0].text = "corrected source"
+            precondition(!model.saveAIReview(record), "Changed evidence must be reviewed again, not silently saved under the old preview")
+            model.episodes[0] = owner
+            for _ in 0..<200 {
+                var next = record; next.id = UUID()
+                precondition(model.saveAIReview(next))
+            }
+            precondition(!model.saveAIReview(record) && model.aiReviews.count == 200)
+            model.deleteAIReview(model.aiReviews[0].id)
+            precondition(model.saveAIReview(record) && model.aiReviews.count == 200)
+            model.stop()
+            print("PASS: changed AI evidence is rejected and the 200-review storage limit never silently evicts history")
         }
         print("AppModel stand-in scenarios passed. Apple SDK, audio routing and device behavior are NOT validated.")
     }

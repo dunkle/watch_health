@@ -15,6 +15,7 @@ struct RootView: View {
     private var l: Localizer { Localizer(locale: locale) }
     @EnvironmentObject var model: AppModel
     @State private var selectedTab = 0
+    @StateObject private var aiSettings = AISettings()
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack { NowView(onReview: { model.selectedDay = Date(); selectedTab = 2 }) }.tabItem { Label(l("今天"), systemImage: "leaf") }.tag(0)
@@ -22,6 +23,7 @@ struct RootView: View {
             NavigationStack { ReportView() }.tabItem { Label(l("回顾"), systemImage: "sparkles") }.tag(2)
             NavigationStack { SettingsView() }.tabItem { Label(l("我的"), systemImage: "person.crop.circle") }.tag(3)
         }
+        .environmentObject(aiSettings)
         .tint(Palette.teal)
         .alert(l("需要留意"), isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button(l("知道了")) { model.error = nil }
@@ -60,7 +62,7 @@ struct NowView: View {
                         Text(l("心率小幅变化可开始录音。本次最多 \(model.recordingMinutes) 分钟；可随时停止，没有触发前的声音。"))
                         Text(l("长录音需保持前台，会增加耗电与空间占用。中断时暂停，回到前台且系统允许时尝试续录；不会补录中断空档。"))
                         Text(l("请确保在场的人知情同意。在私密谈话、会议或不适合录音的场景中结束观察。"))
-                        Text(model.cleanupNewRecordings ? l("本次已开启：完整转写并可靠保存文字后清理原音频；失败保留，清理后不能播放或重转写。") : l("本地转写和本地摘要，不上传档案。原始音频保存在应用中，直到你删除。"))
+                        Text(model.cleanupNewRecordings ? l("本次已开启：完整转写并可靠保存文字后清理原音频；失败保留，清理后不能播放或重转写。") : l("录音与转写保存在本机。只有你单独确认 AI 复盘时，所选文字和身体信号才会发送到指定接口。原始音频保留到你删除或按设置清理。"))
                         Text(l("手表运动会话可提供更密集心率，但会保存真实运动记录并增加耗电；普通状态下心率采样可能稀疏。"))
                     }
                     Button(l("我了解，允许本次观察触发录音")) { showConsent = false; Task { await model.start() } }
@@ -164,6 +166,7 @@ struct EpisodeDetail: View {
                         }
                     }
                     if let owner, !owner.segments.isEmpty {
+                        NavigationLink(l("选取片段进行 AI 复盘")) { AIReviewComposerView(recordingID: owner.id) }
                         Button(l("收藏附近原话")) { model.saveClip(recordingID: owner.id, at: event.trigger.date) }.disabled(!model.canWriteArchive)
                     }
                     if owner?.status == .recording || owner?.status == .paused || owner?.status == .transcribing {
@@ -259,6 +262,9 @@ struct ReportView: View {
     var body: some View {
         Page {
             SectionHeading(title: l("把片刻，串成今天。"), detail: l("事实有出处，感受由本人补充。"))
+            NavigationLink { AIReviewLibraryView() } label: {
+                FeatureRoute(title: l("AI 复盘工作台"), detail: l("选原话、选身体信号，理解一个具体片刻"), icon: "sparkles.rectangle.stack")
+            }.buttonStyle(.plain)
             DatePicker(l("摘要日期"), selection: $model.selectedDay, displayedComponents: .date)
             Surface {
                 HStack {
@@ -331,6 +337,8 @@ struct SettingsView: View {
                     .font(.caption)
             }
             Section(l("记录与回顾")) {
+                NavigationLink(l("AI 复盘工作台")) { AIReviewLibraryView() }
+                NavigationLink(l("AI 与模型设置")) { AISettingsView() }
                 NavigationLink(l("高光与本地搜索")) { JournalLibraryView() }
                 NavigationLink(l("我的长期记忆")) { MemoriesView() }
                 NavigationLink(l("我的小调整计划")) { PlansView() }
@@ -344,17 +352,18 @@ struct SettingsView: View {
                 Toggle(l("观察期间保持屏幕唤醒"), isOn: $model.keepAwake)
                 Text(l("默认1小时，可选1分钟至24小时。中断等待计入本次时限；恢复不会重新计时，24小时不是持续录音保证。"))
                     .font(.caption)
+                NavigationLink(l("选择辅助触发信号")) { TriggerSignalsView() }
                 NavigationLink(l("查看综合算法与健康指标")) { HealthMetricsView() }
             }
             Section(l("运行状态")) {
                 NavigationLink(l("查看处理中心")) { ProcessingCenterView() }
-                Label(l("端侧优先 · 无云端接口"), systemImage: "iphone.gen3.radiowaves.left.and.right")
+                Label(l("端侧优先 · 云端分析由你选择"), systemImage: "iphone.gen3.radiowaves.left.and.right")
                 Text(l("前台可触发和恢复录音。来电、锁屏或切后台时保留已录片段；系统允许且回到前台后尝试续录，否则请点击继续。进程终止后不自动开麦，可重试已存音频的转写。"))
                 Text(l("小幅触发：至少5次/分且5%；大幅标记：至少20次/分且25%。需要至少5个新鲜样本，事件冷却30秒。多指标只调整事件显著度，不诊断情绪。"))
             }
             Section(l("录音与隐私")) {
                 Text(l("音频、转写和摘要保存在本机，并排除应用主动创建目录的系统备份。无账号、无广告、无分析SDK。"))
-                Text(l("当前不提供备份恢复；卸载可能丢失全部记录。默认保留原始音频，可为新会话开启完整转写后的音频清理。"))
+                Text(l("可导出本地文字档案，暂不支持导入恢复和音频备份。卸载可能丢失记录；音频清理需单独开启。"))
                 Text(l("现场其他人应知情同意。应用不会在未开启观察时录音，也不预先监听。"))
                 Button(l("打开系统权限设置")) { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
             }
@@ -363,6 +372,7 @@ struct SettingsView: View {
                 if model.demoMode { Button(l("退出模拟，回到真实记录")) { model.exitDemo() } }
             }
             Section(l("数据管理")) {
+                NavigationLink(l("存储与导出")) { StorageManagementView() }
                 Text(l("已保存 \(model.episodes.filter { !$0.isDemo }.count) 条真实事件。删除不会修改 Apple 健康中的原始心率。"))
                 Button(l("清除全部本地记录与音频"), role: .destructive) { erase = true }.disabled(model.busy || model.summarizing)
             }
