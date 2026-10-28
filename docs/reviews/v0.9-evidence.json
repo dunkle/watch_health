@@ -1,0 +1,216 @@
+{
+  "review_date_beijing": "2026-10-28",
+  "production_commit": "0c8a098",
+  "production_changes": false,
+  "baseline": {
+    "core_xctest": 102,
+    "appmodel_standin_groups": 26,
+    "network_loopback": 8,
+    "gateway_unit_tests": 14,
+    "builder_doubles": 4,
+    "html_v08_combinations": 96,
+    "localization_keys_each": 665,
+    "permission_keys_each": 4
+  },
+  "core_only_coverage": {
+    "scope": "Sources/WatchMindCore only; excludes native and AppModel stand-in runs",
+    "lines": 1481,
+    "covered": 1334,
+    "percent": 90.07,
+    "files": [
+      [
+        "AIReview.swift",
+        226,
+        219,
+        50,
+        46
+      ],
+      [
+        "Avatar.swift",
+        34,
+        30,
+        17,
+        13
+      ],
+      [
+        "CaptureGate.swift",
+        61,
+        58,
+        15,
+        12
+      ],
+      [
+        "Coverage.swift",
+        82,
+        74,
+        35,
+        27
+      ],
+      [
+        "DashboardSummary.swift",
+        35,
+        34,
+        23,
+        22
+      ],
+      [
+        "DeferredWriter.swift",
+        18,
+        18,
+        4,
+        4
+      ],
+      [
+        "HealthCategory.swift",
+        35,
+        27,
+        7,
+        6
+      ],
+      [
+        "HealthContext.swift",
+        122,
+        99,
+        34,
+        31
+      ],
+      [
+        "HealthReview.swift",
+        53,
+        38,
+        23,
+        17
+      ],
+      [
+        "HeartDetector.swift",
+        45,
+        37,
+        20,
+        17
+      ],
+      [
+        "HourTimeline.swift",
+        53,
+        47,
+        23,
+        17
+      ],
+      [
+        "Insights.swift",
+        121,
+        120,
+        34,
+        33
+      ],
+      [
+        "JournalArchive.swift",
+        20,
+        20,
+        8,
+        8
+      ],
+      [
+        "JournalCollection.swift",
+        149,
+        125,
+        82,
+        60
+      ],
+      [
+        "Lifecycle.swift",
+        30,
+        29,
+        12,
+        11
+      ],
+      [
+        "Localization.swift",
+        54,
+        51,
+        20,
+        17
+      ],
+      [
+        "Models.swift",
+        22,
+        21,
+        10,
+        9
+      ],
+      [
+        "MomentMarker.swift",
+        44,
+        43,
+        16,
+        15
+      ],
+      [
+        "ProcessingStage.swift",
+        28,
+        16,
+        3,
+        2
+      ],
+      [
+        "RecordingRecovery.swift",
+        59,
+        58,
+        26,
+        26
+      ],
+      [
+        "RecordingTimeline.swift",
+        67,
+        62,
+        29,
+        24
+      ],
+      [
+        "SleepScorer.swift",
+        123,
+        108,
+        36,
+        26
+      ]
+    ]
+  },
+  "negative_audits": {
+    "capture_invariants_failed": 6,
+    "ai_invariants_failed": 2,
+    "health_invariants_failed": 2,
+    "sleep_cache_invariants_failed": 1,
+    "quota_budget_invariants_failed": 1,
+    "exit_code_each": 1,
+    "part_of_check_sh": false
+  },
+  "capacity_synthetic_executor_only": [
+    {
+      "archive_bytes": 5779805,
+      "decode_ms": 263.25011253356934,
+      "encode_ms": 413.3671522140503,
+      "heart_points": 60000,
+      "minutes_per_recording": 30,
+      "recordings": 7,
+      "scope": "Synthetic core JSON; no audio, metrics, AI history, file I/O or iPhone profiling",
+      "word_segments": 25200
+    },
+    {
+      "archive_bytes": 18708205,
+      "decode_ms": 660.1499319076538,
+      "encode_ms": 1384.2065334320068,
+      "heart_points": 60000,
+      "minutes_per_recording": 60,
+      "recordings": 30,
+      "scope": "Synthetic core JSON; no audio, metrics, AI history, file I/O or iPhone profiling",
+      "word_segments": 216000
+    }
+  ],
+  "unvalidated": [
+    "Apple SDK typecheck/build",
+    "signed Archive/TestFlight",
+    "iOS/Watch actual UI",
+    "HealthKit/Speech/SoundAnalysis/AVFoundation/Keychain real platform",
+    "real model providers and billing",
+    "device memory/battery/24h runtime"
+  ]
+}
