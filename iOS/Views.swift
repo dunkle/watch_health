@@ -18,10 +18,10 @@ struct RootView: View {
     @StateObject private var aiSettings = AISettings()
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack { NowView(onReview: { model.selectedDay = Date(); selectedTab = 2 }) }.tabItem { Label(l("今天"), systemImage: "leaf") }.tag(0)
-            NavigationStack { TimelineView() }.tabItem { Label(l("片刻"), systemImage: "waveform.path") }.tag(1)
-            NavigationStack { ReportView() }.tabItem { Label(l("回顾"), systemImage: "sparkles") }.tag(2)
-            NavigationStack { SettingsView() }.tabItem { Label(l("我的"), systemImage: "person.crop.circle") }.tag(3)
+            NavigationStack { NowView(onReview: { model.selectedDay = Date(); selectedTab = 2 }) }.tabItem { Label(l("今天"), systemImage: "leaf").accessibilityIdentifier("tab-today") }.tag(0)
+            NavigationStack { TimelineView() }.tabItem { Label(l("片刻"), systemImage: "waveform.path").accessibilityIdentifier("tab-moments") }.tag(1)
+            NavigationStack { ReportView() }.tabItem { Label(l("回顾"), systemImage: "sparkles").accessibilityIdentifier("tab-review") }.tag(2)
+            NavigationStack { SettingsView() }.tabItem { Label(l("我的"), systemImage: "person.crop.circle").accessibilityIdentifier("tab-settings") }.tag(3)
         }
         .environmentObject(aiSettings)
         .tint(Palette.teal)
@@ -102,7 +102,9 @@ struct EpisodeCard: View {
                 .foregroundStyle(excerpt.isEmpty ? Palette.muted : Palette.ink).multilineTextAlignment(.leading)
             HStack(spacing: 6) {
                 Image(systemName: "heart").foregroundStyle(Palette.coral)
-                Text(l("\(Int(event.trigger.baseline)) → \(Int(event.trigger.bpm)) 次/分")).monospacedDigit()
+                if let baseline = event.trigger.displayBaseline, let bpm = event.trigger.displayBPM {
+                    Text(l("\(baseline) → \(bpm) 次/分")).monospacedDigit()
+                } else { Text(l("历史心率值不可用，原话仍可核对。")) }
             }.font(.caption).foregroundStyle(Palette.muted)
             Divider().overlay(AppTheme.border)
             ViewThatFits(in: .horizontal) {
@@ -136,11 +138,13 @@ struct EpisodeDetail: View {
                 Text(l.date(event.trigger.date, includeDate: true, seconds: true)).foregroundStyle(Palette.muted)
                 Surface {
                     Label(l("心率变化 · 并非情绪判断"), systemImage: "heart.fill").font(.headline)
+                    if let baseline = event.trigger.displayBaseline, let bpm = event.trigger.displayBPM {
                     Chart {
                         BarMark(x: .value(l("类型"), l("近期中位数")), y: .value(l("次/分"), event.trigger.baseline)).foregroundStyle(Palette.teal.opacity(0.4))
                         BarMark(x: .value(l("类型"), l("触发样本")), y: .value(l("次/分"), event.trigger.bpm)).foregroundStyle(Palette.coral)
                     }.frame(height: 150).chartYScale(domain: 0...max(150, event.trigger.bpm + 20))
-                    Text(l("\(Int(event.trigger.baseline)) → \(Int(event.trigger.bpm)) 次/分。\(l.key(event.note))")).font(.subheadline)
+                    Text(l("\(baseline) → \(bpm) 次/分。\(l.key(event.note))")).font(.subheadline)
+                    } else { Text(l("历史心率值不可用，原话仍可核对。")); Text(l.key(event.note)).font(.caption) }
                 }
                 Surface {
                     HStack {
@@ -337,12 +341,12 @@ struct SettingsView: View {
                     .font(.caption)
             }
             Section(l("记录与回顾")) {
-                NavigationLink(l("AI 复盘工作台")) { AIReviewLibraryView() }
-                NavigationLink(l("AI 与模型设置")) { AISettingsView() }
+                NavigationLink(l("AI 复盘工作台")) { AIReviewLibraryView() }.accessibilityIdentifier("ai-review-link")
+                NavigationLink(l("AI 与模型设置")) { AISettingsView() }.accessibilityIdentifier("ai-settings-link")
                 NavigationLink(l("高光与本地搜索")) { JournalLibraryView() }
                 NavigationLink(l("我的长期记忆")) { MemoriesView() }
                 NavigationLink(l("我的小调整计划")) { PlansView() }
-                NavigationLink(l("健康趋势与日常安排")) { HealthOverviewView() }
+                NavigationLink(l("健康趋势与日常安排")) { HealthOverviewView() }.accessibilityIdentifier("health-overview-link")
                 NavigationLink(l("音频与资源设置")) { CapturePolicySettingsView() }
             }
             Section(l("录音与触发设置")) {
@@ -362,6 +366,8 @@ struct SettingsView: View {
                 Text(l("小幅触发：至少5次/分且5%；大幅标记：至少20次/分且25%。需要至少5个新鲜样本，事件冷却30秒。多指标只调整事件显著度，不诊断情绪。"))
             }
             Section(l("录音与隐私")) {
+                NavigationLink(l("隐私与数据说明")) { PrivacyCenterView() }.accessibilityIdentifier("privacy-center-link")
+                NavigationLink(l("帮助与支持")) { SupportCenterView() }.accessibilityIdentifier("support-center-link")
                 Text(l("音频、转写和摘要保存在本机，并排除应用主动创建目录的系统备份。无账号、无广告、无分析SDK。"))
                 Text(l("可导出本地文字档案，暂不支持导入恢复和音频备份。卸载可能丢失记录；音频清理需单独开启。"))
                 Text(l("现场其他人应知情同意。应用不会在未开启观察时录音，也不预先监听。"))

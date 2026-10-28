@@ -1,11 +1,10 @@
-"""Adversarial capture audit of actual AppModel orchestration with platform stand-ins.
+"""Capture release regression of actual AppModel orchestration with platform stand-ins.
 
 Run after scripts/check.sh (or build the core first):
     SWIFT_BIN=/path/to/swift python3 scripts/tests/review-capture-regressions.py
 
-This is intentionally outside check.sh: a red result records an unresolved review
-finding, not an expected product behavior. It exits 1 if any correctness invariant
-fails. It never accesses Apple APIs, user recordings, real secrets, or the network.
+This is part of check.sh. It exits 1 if any repaired correctness invariant
+regresses. It never accesses Apple APIs, user recordings, real secrets, or the network.
 The only stand-in adaptation lets a transcription return a chosen partial result.
 """
 from pathlib import Path

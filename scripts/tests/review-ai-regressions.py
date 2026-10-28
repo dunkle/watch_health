@@ -1,7 +1,7 @@
 """Adversarial release audit of actual AI review evidence code.
 
-Standalone and intentionally excluded from check.sh until the two reviewed defects
-are fixed. Assertions describe required user behavior; current code exits 1.
+Standalone regression for the two reviewed defects. Assertions describe required
+user behavior; it returns zero only when both invariants hold.
 Run scripts/check.sh first to build core objects, then:
     SWIFT_BIN=/path/to/swift python3 scripts/tests/review-ai-regressions.py
 No Apple SDK, real model, key, or external network is used.
@@ -14,7 +14,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 swift = os.environ.get("SWIFT_BIN", "swift")
 swiftc = str(Path(swift).with_name("swiftc")) if "/" in swift else "swiftc"
-build = Path(subprocess.check_output([swift, "build", "--show-bin-path"], cwd=ROOT, text=True).strip())
+build = Path(os.environ["WATCHMIND_CORE_BUILD"]) if "WATCHMIND_CORE_BUILD" in os.environ else Path(subprocess.check_output([swift, "build", "--show-bin-path"], cwd=ROOT, text=True).strip())
 objects = sorted((build / "WatchMindCore.build").glob("*.swift.o"))
 if not objects:
     raise SystemExit("Build the core with scripts/check.sh first.")

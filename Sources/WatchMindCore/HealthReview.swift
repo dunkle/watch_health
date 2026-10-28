@@ -13,7 +13,7 @@ public enum HealthReview {
         guard let bounds = calendar.dateInterval(of: .day, for: day) else { return [] }
         return stride(from: bounds.start.timeIntervalSince1970, to: bounds.end.timeIntervalSince1970, by: 600).map { seconds in
             let start = Date(timeIntervalSince1970: seconds), end = min(bounds.end, start.addingTimeInterval(600))
-            let count = hearts.filter { $0.sample.date >= start && $0.sample.date < end }.count
+            let count = hearts.filter { $0.sample.date >= start && $0.sample.date < end && $0.sample.bpm.isFinite && (30...240).contains($0.sample.bpm) }.count
             let active = readings.contains { $0.date >= start && $0.date < end && $0.kind.accepts($0.value) && (($0.kind == .steps && $0.value >= 20) || ($0.kind == .activeEnergy && $0.value >= 2)) }
             return LifeBlock(start: start, end: end, signal: active ? .activity : (count > 0 ? .heart : .unknown), sampleCount: count)
         }
@@ -21,9 +21,10 @@ public enum HealthReview {
     public static func trend(_ kind: MetricKind, readings: [MetricReading], at now: Date, calendar: Calendar = .current) -> (reading: MetricReading, baseline: Double?, days: Int)? {
         guard let latest = ContextAlgorithm.latest(kind, in: readings, at: now) else { return nil }
         let cutoff = calendar.startOfDay(for: now)
-        let days = Set(readings.filter { $0.kind == kind && kind.accepts($0.value) && $0.date < cutoff && $0.date >= cutoff.addingTimeInterval(-14 * 86400) }.map { calendar.startOfDay(for: $0.date) }).count
+        let historyStart = ContextAlgorithm.historyStart(before: now, calendar: calendar)
+        let days = Set(readings.filter { $0.kind == kind && kind.accepts($0.value) && $0.date < cutoff && $0.date >= historyStart }.map { calendar.startOfDay(for: $0.date) }).count
         // Baselines from mixed named sources are not treated as directly comparable.
-        let sources = Set(readings.filter { $0.kind == kind && $0.date >= cutoff.addingTimeInterval(-14 * 86400) && $0.date <= now }.map(\.source))
+        let sources = Set(readings.filter { $0.kind == kind && $0.date >= historyStart && $0.date <= now }.map(\.comparableSourceID))
         let baseline = sources.count == 1 ? ContextAlgorithm.baseline(kind, readings: readings, before: now, calendar: calendar)?.median : nil
         return (latest, baseline, days)
     }

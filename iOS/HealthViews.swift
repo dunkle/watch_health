@@ -144,9 +144,12 @@ struct AssessmentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(l("事件显著度（非健康分数）")).font(.headline)
-            Text("\(Int(assessment.score))/100").font(.title2)
-            Text(l("有效指标权重覆盖：\(Int(assessment.coverage * 100))%；不是情绪置信度。"))
-                .font(.caption).foregroundStyle(.secondary)
+            if assessment.score.isFinite, (0...100).contains(assessment.score),
+               assessment.coverage.isFinite, (0...1).contains(assessment.coverage) {
+                Text("\(Int(assessment.score))/100").font(.title2)
+                Text(l("有效指标权重覆盖：\(Int(assessment.coverage * 100))%；不是情绪置信度。"))
+                    .font(.caption).foregroundStyle(.secondary)
+            } else { Text(l("历史显著度数据不可用，不用于身体状态判断。")) }
             if assessment.activeMovement { Text(l("可能伴随活动；心率显著度已适度降低，仍保留录音与标记。")) }
             Text(l("参与辅助评分：\(assessment.contributing.map { l.key($0.title) }.joined(separator: l("、")))"))
                 .font(.caption)

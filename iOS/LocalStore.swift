@@ -6,6 +6,7 @@ typealias Archive = JournalArchive
 final class LocalStore {
     let directory: URL
     let file: URL
+    private let archiveStore: ArchiveFileStore
     init() throws {
         directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                 appropriateFor: nil, create: true).appendingPathComponent("WatchMind", isDirectory: true)
@@ -13,26 +14,18 @@ final class LocalStore {
         try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: directory.path)
         var resource = URLResourceValues(); resource.isExcludedFromBackup = true
         var folder = directory; try folder.setResourceValues(resource)
-        file = directory.appendingPathComponent("archive.json")
+        archiveStore = try ArchiveFileStore(directory: directory)
+        file = archiveStore.file
         for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             where url.lastPathComponent.hasPrefix("chunk-") && url.pathExtension == "m4a" {
             try FileManager.default.removeItem(at: url)
         }
     }
-    func load() throws -> Archive {
-        let data: Data
-        do { data = try Data(contentsOf: file) }
-        catch {
-            let failure = error as NSError
-            if failure.domain == NSCocoaErrorDomain && failure.code == NSFileReadNoSuchFileError { return Archive() }
-            throw error
-        }
-        let archive = try JSONDecoder().decode(Archive.self, from: data)
-        guard archive.version == 1 else { throw CocoaError(.fileReadCorruptFile) }
-        return archive
-    }
-    func save(_ archive: Archive) throws {
-        try JSONEncoder().encode(archive).write(to: file, options: [.atomic, .completeFileProtection])
+    func load() throws -> Archive { try archiveStore.load() }
+    func save(_ archive: Archive) throws { try archiveStore.save(archive) }
+    func metadataByteCount() throws -> Int64 { try archiveStore.metadataByteCount() }
+    func availableCapacity() throws -> Int64? {
+        try directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage
     }
     func audioURL(_ id: UUID) -> URL { directory.appendingPathComponent(id.uuidString + ".m4a") }
     func deleteAudio(_ name: String) throws {

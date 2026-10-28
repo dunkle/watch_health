@@ -1,6 +1,6 @@
-"""Reproduce confirmed release-review defects in the actual core (intentionally red).
+"""Reproduce confirmed release-review defects in the actual core (release regression).
 
-This audit is excluded from check.sh until its production defects are fixed. It creates
+This regression creates
 an isolated temporary Swift package whose Sources symlink points at the repository's
 actual WatchMindCore. No copied/fake core implementation, Apple SDK, or network is used.
 
@@ -84,5 +84,5 @@ with tempfile.TemporaryDirectory(prefix='watchmind-health-release-audit-') as di
     for line in output.splitlines():
         if 'AUDIT ' in line or ': error:' in line or 'Executed 2 tests' in line:
             print(line)
-    print('Intentional release-invariant audit; it is not part of the green baseline check.sh suite.')
+    print('Release-invariant regression: source mixing and calendar-window assertions remain enabled.')
     raise SystemExit(result.returncode)

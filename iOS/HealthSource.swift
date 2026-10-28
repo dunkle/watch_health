@@ -1,4 +1,5 @@
 import HealthKit
+import CryptoKit
 import WatchMindCore
 
 @MainActor
@@ -53,10 +54,20 @@ final class HealthSource {
     func stop() { starts.cancel(); queryID = nil; if let query { store.stop(query) }; query = nil }
 
     func context(authorize: Bool) async throws -> [MetricReading] {
-        guard HKHealthStore.isHealthDataAvailable() else { return [] }
+        try await contextSnapshot(authorize: authorize).readings
+    }
+    /// Source and local-device identifiers are hashed before storage or optional AI sharing.
+    nonisolated private static func stableSourceID(_ sample: HKSample) -> String {
+        let identity = sample.sourceRevision.source.bundleIdentifier + "|" +
+            (sample.device?.localIdentifier ?? sample.sourceRevision.productType ?? "unknown-device")
+        return SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+    func contextSnapshot(authorize: Bool) async throws -> HealthMetricSnapshot {
+        guard HKHealthStore.isHealthDataAvailable() else { return .init(readings: []) }
         if authorize { try await store.requestAuthorization(toShare: [], read: readTypes) }
-        let now = Date(), since = Date().addingTimeInterval(-14 * 86400)
+        let now = Date(), since = ContextAlgorithm.historyStart(before: Date())
         var result: [MetricReading] = []
+        var replacingSleepWindow: DateInterval?
         // Each query is bounded. Missing readable samples are not treated as zero or proof of denial.
         for (kind, identifier, unit) in quantityTypes {
             guard let type = HKObjectType.quantityType(forIdentifier: identifier) else { continue }
@@ -66,7 +77,7 @@ final class HealthSource {
                     predicate: HKQuery.predicateForSamples(withStart: since, end: now), limit: 400,
                     sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]) { _, samples, _ in
                     let rows = (samples as? [HKQuantitySample] ?? []).map {
-                        MetricReading(id: $0.uuid.uuidString, kind: kind, value: $0.quantity.doubleValue(for: HKUnit(from: unitString)) * (kind == .oxygen ? 100 : 1), date: $0.endDate, source: $0.sourceRevision.source.name)
+                        MetricReading(id: $0.uuid.uuidString, kind: kind, value: $0.quantity.doubleValue(for: HKUnit(from: unitString)) * (kind == .oxygen ? 100 : 1), date: $0.endDate, source: $0.sourceRevision.source.name, sourceID: Self.stableSourceID($0))
                     }
                     continuation.resume(returning: rows.filter { kind.accepts($0.value) })
                 }
@@ -93,9 +104,9 @@ final class HealthSource {
             if let row { result.append(row) }
         }
         if let type = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
-            let intervals: [SleepInterval] = await withCheckedContinuation { continuation in
+            let sleepResult: (intervals: [SleepInterval], complete: Bool) = await withCheckedContinuation { continuation in
                 let q = HKSampleQuery(sampleType: type, predicate: HKQuery.predicateForSamples(withStart: since, end: now),
-                    limit: 6000, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]) { _, samples, _ in
+                    limit: 6000, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]) { _, samples, error in
                     let intervals = (samples as? [HKCategorySample] ?? []).compactMap { sample -> SleepInterval? in
                         let state: SleepInterval.State
                         switch sample.value {
@@ -108,18 +119,18 @@ final class HealthSource {
                         default: return nil
                         }
                         return SleepInterval(start: sample.startDate, end: sample.endDate, state: state,
-                            source: sample.sourceRevision.source.bundleIdentifier,
+                            source: Self.stableSourceID(sample),
                             priority: sample.sourceRevision.productType?.hasPrefix("Watch") == true ? 1 : 0)
                     }
-                    continuation.resume(returning: intervals)
+                    continuation.resume(returning: (intervals, error == nil && samples != nil && (samples?.count ?? 0) < 6000))
                 }
                 store.execute(q)
             }
-            result += SleepScorer.estimates(intervals).map {
-                MetricReading(id: "sleep-\($0.end.timeIntervalSince1970)", kind: .sleepScore, value: $0.score,
-                    date: $0.end, source: $0.efficiency == nil ? "local-duration-only" : "local-duration-efficiency")
+            if sleepResult.complete {
+                result += MetricHistory.sleepReadings(sleepResult.intervals)
+                replacingSleepWindow = DateInterval(start: since, end: now)
             }
         }
-        return result
+        return HealthMetricSnapshot(readings: result, replacingSleepWindow: replacingSleepWindow)
     }
 }

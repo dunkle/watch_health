@@ -7,7 +7,7 @@ import WatchMindCore
         for _ in 0..<30 { await Task.yield() }
     }
     @MainActor static func makeRecording(cleanup: Bool = false, lowPower: Bool = false, deferWork: Bool = false) async -> (AppModel, AudioCapture) {
-        LocalStore.archive = Archive(); LocalStore.failSave = false; LocalStore.failDelete = false; LocalStore.deletedNames = []
+        LocalStore.archive = Archive(); LocalStore.failSave = false; LocalStore.failLoad = false; LocalStore.freeBytes = nil; LocalStore.failDelete = false; LocalStore.deletedNames = []
         ScenarioDefaults.store.set(false, forKey: "filterQuietAudio")
         ScenarioDefaults.store.set(cleanup, forKey: "cleanupNewRecordings")
         ScenarioDefaults.store.set(lowPower, forKey: "fakeLowPower")
@@ -34,7 +34,7 @@ import WatchMindCore
     }
     @MainActor static func reviewModel(owners: [Episode], metrics: [MetricReading] = []) -> AppModel {
         LocalStore.archive = Archive(episodes: owners, metrics: metrics)
-        LocalStore.failSave = false; LocalStore.failDelete = false; LocalStore.deletedNames = []
+        LocalStore.failSave = false; LocalStore.failLoad = false; LocalStore.freeBytes = nil; LocalStore.failDelete = false; LocalStore.deletedNames = []
         UIApplication.shared.isProtectedDataAvailable = true
         return AppModel()
     }
@@ -306,7 +306,7 @@ import WatchMindCore
             print("PASS: low-power automatic work defers and explicit manual retry can proceed")
         }
         do {
-            LocalStore.failSave = false; LocalStore.failDelete = false; LocalStore.deletedNames = []
+            LocalStore.failSave = false; LocalStore.failLoad = false; LocalStore.freeBytes = nil; LocalStore.failDelete = false; LocalStore.deletedNames = []
             let date = Date().addingTimeInterval(-200)
             var owner = Episode(trigger: .init(date: date, bpm: 110, baseline: 70), status: .partial)
             owner.captureStarted = date; owner.captureEnded = date.addingTimeInterval(160); owner.audioName = "first.m4a"
@@ -342,7 +342,7 @@ import WatchMindCore
             print("PASS: skipped speech candidates retain audio, manual retry disables filtering, manual markers protect nearby audio")
         }
         do {
-            LocalStore.failSave = false; LocalStore.failDelete = false; LocalStore.deletedNames = []
+            LocalStore.failSave = false; LocalStore.failLoad = false; LocalStore.freeBytes = nil; LocalStore.failDelete = false; LocalStore.deletedNames = []
             let date = Date().addingTimeInterval(-60)
             var owner = Episode(trigger: .init(date: date, bpm: 110, baseline: 70), status: .ready)
             owner.captureStarted = date; owner.captureEnded = Date(); owner.audioName = "retained.m4a"
@@ -432,6 +432,80 @@ import WatchMindCore
             precondition(model.saveAIReview(record) && model.aiReviews.count == 200)
             model.stop()
             print("PASS: changed AI evidence is rejected and the 200-review storage limit never silently evicts history")
+        }
+        do {
+            let owner = reviewOwner(), model = reviewModel(owners: [reviewOwner()])
+            model.episodes = [owner]; precondition(model.save())
+            LocalStore.failSave = true; model.delete(owner)
+            precondition(LocalStore.deletedNames.isEmpty && LocalStore.archive.episodes.count == 1)
+            precondition(model.canExportArchive && !model.canWriteArchive)
+            let exported = try! JSONDecoder().decode(Archive.self, from: model.exportTextArchive())
+            precondition(exported.episodes.isEmpty)
+            LocalStore.failSave = false; model.retryStorage()
+            precondition(model.canWriteArchive && LocalStore.archive.episodes.isEmpty && LocalStore.archive.pendingAudioDeletions.isEmpty)
+            precondition(LocalStore.deletedNames.contains(owner.audioName!))
+            model.stop()
+            print("PASS: failed delete commit removes no files, recovery export stays available, retry commits tombstone before removal")
+        }
+        do {
+            let owner = reviewOwner(), model = reviewModel(owners: [reviewOwner()])
+            model.episodes = [owner]; precondition(model.save()); LocalStore.failDelete = true
+            model.delete(owner)
+            precondition(LocalStore.archive.episodes.isEmpty && LocalStore.archive.pendingAudioDeletions == owner.audioNames)
+            LocalStore.failDelete = false
+            let restarted = AppModel(); await settle()
+            precondition(restarted.pendingAudioDeletions.isEmpty && LocalStore.archive.pendingAudioDeletions.isEmpty)
+            precondition(LocalStore.deletedNames.contains(owner.audioName!))
+            restarted.stop(); model.stop()
+            print("PASS: durable deletion intents survive partial I/O failure and resume safely on restart")
+        }
+        do {
+            LocalStore.archive = Archive(); LocalStore.failLoad = true; LocalStore.failSave = false
+            let model = AppModel(); model.retryStorage()
+            precondition(!model.canWriteArchive && !model.canExportArchive)
+            model.setForeground(true)
+            precondition(!model.canWriteArchive, "An unreadable archive cannot be overwritten by a foreground retry")
+            LocalStore.failLoad = false; LocalStore.archive = Archive(episodes: [reviewOwner()]); model.retryStorage()
+            precondition(model.canWriteArchive && model.episodes.count == 1, "Explicit retry must read recovered content, not replace it with an empty archive")
+            print("PASS: unreadable archives remain protected while only safely loaded memory can be exported")
+        }
+        do {
+            LocalStore.archive = Archive(); LocalStore.failLoad = false; LocalStore.freeBytes = 1024
+            let model = AppModel(); await model.start()
+            WatchReceiver.latest?.onTrigger?(.init(date: Date(), bpm: 110, baseline: 70))
+            precondition(AudioCapture.latest!.starts == 0 && model.recordingID == nil && !model.busy)
+            precondition(model.episodes.last?.status == .failed)
+            LocalStore.freeBytes = nil; model.stop()
+            print("PASS: insufficient free space prevents opening a microphone without losing the event or operation lock")
+        }
+        do {
+            var owner = reviewOwner(); owner.status = .failed; owner.transcript = ""; owner.segments = []
+            let model = reviewModel(owners: [owner]), audio = AudioCapture.latest!
+            audio.checkpointResults = [.init(text: "durable first chunk", segments: [.init(text: "durable first chunk", offset: 0, duration: 5)], failedChunks: 0, duration: 60, spans: [(0..<45, .recognized)])]
+            audio.waitForCancellation = true
+            let task = Task { await model.retry(owner) }
+            await settle()
+            precondition(LocalStore.archive.episodes[0].transcript == "durable first chunk")
+            model.cancelTranscription(); await task.value
+            precondition(!model.busy && model.episodes[0].status == .deferred)
+            precondition(LocalStore.archive.episodes[0].transcript == "durable first chunk")
+            audio.waitForCancellation = false; audio.checkpointResults = []
+            await model.retry(model.episodes[0])
+            precondition(audio.lastResumeSpans.contains { $0.0 == 0..<45 && $0.1 == .recognized })
+            model.stop()
+            print("PASS: per-chunk checkpoints survive cancellation and the next job receives completed ranges for continuation")
+        }
+        do {
+            var owner = reviewOwner(); owner.status = .partial; owner.segments = []; owner.transcript = "legacy unaligned text"
+            owner.fileTranscripts = [.init(audioName: owner.audioName!, text: owner.transcript, segments: [])]
+            let model = reviewModel(owners: [owner])
+            model.journal.processing = [.init(recordingID: owner.id, audioName: owner.audioName!, start: owner.captureStarted!, end: owner.captureStarted!.addingTimeInterval(45), outcome: .recognized)]
+            let audio = AudioCapture.latest!
+            await model.retry(owner)
+            precondition(audio.lastResumeSpans.isEmpty, "Unaligned legacy text cannot substantiate completed word ranges")
+            precondition(model.episodes[0].transcript == "saved text")
+            model.stop()
+            print("PASS: legacy unaligned text forces a full reread instead of skipping missing checkpoint words")
         }
         print("AppModel stand-in scenarios passed. Apple SDK, audio routing and device behavior are NOT validated.")
     }

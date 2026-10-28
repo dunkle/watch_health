@@ -30,7 +30,13 @@ public struct PlotPoint: Identifiable, Sendable {
 public enum HeartTimeline {
     /// Keep gaps disconnected and min/max extrema visible even when reducing a long trace.
     public static func plot(_ points: [HeartPoint], limit: Int = 500, gap: TimeInterval = 90) -> [PlotPoint] {
-        let ordered = points.filter { $0.sample.bpm.isFinite }.sorted { $0.sample.date < $1.sample.date }
+        let ordered = points.compactMap { point -> HeartPoint? in
+            guard point.sample.date.timeIntervalSince1970.isFinite,
+                  Trigger.isValidHeartRate(point.sample.bpm) else { return nil }
+            var safe = point
+            if let baseline = point.baseline, !Trigger.isValidHeartRate(baseline) { safe.baseline = nil }
+            return safe
+        }.sorted { $0.sample.date < $1.sample.date }
         var section = 0; var previous: Date?
         let source = ordered.map { point -> PlotPoint in
             if let previous, point.sample.date.timeIntervalSince(previous) > gap { section += 1 }
@@ -52,10 +58,21 @@ public enum HeartTimeline {
 }
 
 public extension Trigger {
-    var isLargeChange: Bool { abs(delta) >= 20 && abs(delta) / max(baseline, 1) >= 0.25 }
+    /// Older archives may contain values accepted before receiver validation was added.
+    /// Validate for every display / classification path; never coerce missing data to zero.
+    static func isValidHeartRate(_ value: Double) -> Bool { value.isFinite && (30...240).contains(value) }
+    var hasValidMeasurements: Bool { Self.isValidHeartRate(bpm) && Self.isValidHeartRate(baseline) }
+    var displayBPM: Int? { Self.isValidHeartRate(bpm) ? Int(bpm) : nil }
+    var displayBaseline: Int? { Self.isValidHeartRate(baseline) ? Int(baseline) : nil }
+    var isLargeChange: Bool { hasValidMeasurements && abs(delta) >= 20 && abs(delta) / baseline >= 0.25 }
 }
 public extension Episode {
-    var isImportant: Bool { trigger.isLargeChange || (assessment.map { $0.score >= 65 && $0.coverage >= 0.8 } ?? false) }
+    var isImportant: Bool {
+        guard trigger.hasValidMeasurements else { return false }
+        return trigger.isLargeChange || (assessment.map {
+            $0.score.isFinite && (65...100).contains($0.score) && $0.coverage.isFinite && (0.8...1).contains($0.coverage)
+        } ?? false)
+    }
     func owner(in events: [Episode]) -> Episode? {
         guard let linkedRecordingID else { return self }
         return events.first { $0.id == linkedRecordingID && $0.linkedRecordingID == nil }

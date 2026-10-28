@@ -31,6 +31,6 @@
 	<key>WKApplication</key>
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
-	<string>com.watchmind.app</string>
+	<string>$(WATCHMIND_APP_BUNDLE_ID)</string>
 </dict>
 </plist>

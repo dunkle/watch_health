@@ -14,7 +14,7 @@ enum LocalIntelligence {
                 evidence.append("Known capture coverage: observation seconds \(coverage.observed.map { String($0) } ?? "unknown"), recorded seconds \(coverage.recorded), processed seconds \(coverage.processed), failed seconds \(coverage.failed), skipped seconds \(coverage.skipped). These time ranges do not measure emotion accuracy, speech duration, or representativeness of life.")
             }
             for event in events {
-                let metadata = "Entry ID: \(event.id). Heart rate: \(Int(event.trigger.bpm)) bpm; recent median: \(Int(event.trigger.baseline)). User-confirmed feeling: \(event.feeling.map { l.key($0) } ?? "unknown"). "
+                let metadata = "Entry ID: \(event.id). Heart rate: \(event.trigger.displayBPM.map { String($0) } ?? "unknown") bpm; recent median: \(event.trigger.displayBaseline.map { String($0) } ?? "unknown"). User-confirmed feeling: \(event.feeling.map { l.key($0) } ?? "unknown"). "
                 let context = event.assessment.map { " Non-medical salience: \(Int($0.score))/100, weight coverage: \(Int($0.coverage * 100))%, movement context: \($0.activeMovement)." } ?? ""
                 var remaining = Insights.voiceContext(for: event, events: recordings)
                 if remaining.isEmpty { evidence.append(metadata + context + "No voice context was captured.") }

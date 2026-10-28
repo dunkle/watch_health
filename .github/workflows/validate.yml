@@ -9,7 +9,7 @@ permissions:
 jobs:
   native-build:
     runs-on: macos-26
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Show selected SDK and compiler
@@ -22,10 +22,7 @@ jobs:
           python3 scripts/tests/test_setup_progress.py
       - name: Test core
         run: |
-          swift test -j 4
-          python3 scripts/tests/check-appmodel.py
-          python3 scripts/tests/check-ai-transport.py
-          python3 -m unittest discover -s server
+          ./scripts/check.sh
       - name: Generate Xcode project
         run: |
           brew install xcodegen
@@ -36,3 +33,12 @@ jobs:
           xcodebuild -project WatchMind.xcodeproj -scheme WatchMind \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build
+      - name: Run native unit and UI smoke tests on an available iPhone simulator
+        run: ./scripts/test-native.sh
+      - name: Preserve native test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-xcresults
+          path: .build-logs/*.xcresult
+          if-no-files-found: ignore

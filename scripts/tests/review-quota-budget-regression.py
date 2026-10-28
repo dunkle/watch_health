@@ -1,12 +1,9 @@
-"""Negative release audit: successful-result quota is not a paid-attempt budget.
+"""Regression for R05: success refunds must never refund paid-attempt allowance.
 
-Standalone and intentionally outside check.sh. All calls go to an ephemeral
-loopback gateway with the existing fake upstream; no provider, real key, or paid
-request is used. Expected production behavior is that a separate operator-paid
-attempt budget bounds upstream executions even if accepted upstream work returns
-an unusable result. The current gateway has only a refundable success quota, so
-this audit deliberately exits 1. This blocks public free-tier operation, not
-personal BYOK use of the app.
+All calls use an ephemeral loopback gateway and a fake upstream. The configured
+attempt budget is explicit and independent of the successful-result allowance.
+No provider credentials or paid external request is used. Nonzero means the
+cost-protection invariant has regressed.
 """
 from pathlib import Path
 import sys
@@ -22,13 +19,13 @@ try:
     fixture.mode = "malformed"
     # The fake upstream records each accepted execution before returning invalid
     # content. A real provider can still bill for this executed work.
-    expected_attempt_budget = fixture.config.daily_limit
+    expected_attempt_budget = fixture.config.attempt_limit
     statuses = [fixture.request()[0] for _ in range(10)]
     actual_attempts = len(fixture.calls)
     if actual_attempts > expected_attempt_budget:
         print(
             "FAIL QUOTA-R01: no independent paid-attempt budget; "
-            f"configured daily result limit={fixture.config.daily_limit}, "
+            f"configured daily attempt limit={expected_attempt_budget}, "
             f"upstream executions={actual_attempts}, statuses={statuses}. "
             "Refunding unusable results permits repeated potentially billable work."
         )

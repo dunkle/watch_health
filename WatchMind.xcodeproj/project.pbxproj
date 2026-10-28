@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		04A148F239EAACDAB558DDC3 /* WatchMindCore in Frameworks */ = {isa = PBXBuildFile; productRef = BC87276A2BC7BA4714F8ABB5 /* WatchMindCore */; };
 		0C1B04713A5E5005CCF4DB8F /* WatchMindWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846DF7D94289884D2E945480 /* WatchMindWatchApp.swift */; };
 		0E52EDB58528E67C5AF3A79E /* LocalIntelligence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0174D50091A62C076B3E6C9C /* LocalIntelligence.swift */; };
 		26700C27BE86B31C087457B3 /* StorageManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA94C254A08FE784113DEC7 /* StorageManagementView.swift */; };
@@ -18,21 +19,26 @@
 		5F9734C7ADF1F465526DD72C /* LocalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C237E4404ADF91F23429DAB4 /* LocalStore.swift */; };
 		6479D0182FBDCF1633182F0B /* WatchMindCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9C8720C7989C17BAA75FADCD /* WatchMindCore */; };
 		65700E8F50851E4FF5799566 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC67002A3A1F66EBA2ADB47A /* DesignSystem.swift */; };
+		6A6362DEE7CC65153D02E7F7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0D4898F20EE8FD10CFD70DB8 /* Assets.xcassets */; };
 		7E50F75E0222277BA93EDE21 /* HealthViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D7096C301D6891CDB01B128 /* HealthViews.swift */; };
 		8498EB902B46DA367BCED4BB /* JournalViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67AD3B7C5D213AACBE81AB4D /* JournalViews.swift */; };
 		921DB404AEC575861AB1BD88 /* WatchReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABEC3679A0742ADD38CE2C98 /* WatchReceiver.swift */; };
 		931F1BFA85A706ABF4B0582C /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62AC2A8AC09566E06295147 /* Views.swift */; };
 		9D1BDECECF41017025CE0FF3 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA9EC9C9CDFE6A561B89590A /* InfoPlist.strings */; };
 		A1C0D1F82C8CA9AB4A902E79 /* DashboardViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6601DB8C6EA1DFBEF410537B /* DashboardViews.swift */; };
+		A4B5DEDBEA811A77A943E2E7 /* PrivacySupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07777AB2EFF226F635331E14 /* PrivacySupportViews.swift */; };
+		A52839F4EA5D3B17EB449F5D /* NativeSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 056390F4D50973EBE4554120 /* NativeSmokeTests.swift */; };
 		AB1E83899AD90D7F4E61183D /* WellbeingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B0AB28C62310B6B10BAA74D /* WellbeingViews.swift */; };
 		AC24DB0211FF1112F027EC87 /* AIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39558AEEF5E60654E8094C35 /* AIService.swift */; };
 		ADE911F72C8BC21609574489 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA9EC9C9CDFE6A561B89590A /* InfoPlist.strings */; };
+		B8D2E4CA1403EEF994217327 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0D4898F20EE8FD10CFD70DB8 /* Assets.xcassets */; };
 		C6A6A5532D559A7BCCC4F531 /* AvatarViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DA85858CE38E58EA701C7B /* AvatarViews.swift */; };
 		D68F3A47A855C197C7E162E5 /* AppModel+Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D4DF04A40973A1CBA55A967 /* AppModel+Journal.swift */; };
 		D6A0A46871E5F5E63A1A4B53 /* WatchMindApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1D84C728D8B1FA3E007CBC /* WatchMindApp.swift */; };
 		D815B64F881FEA0876ACC80D /* LibraryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCF48223A38C826C2BC3C3CD /* LibraryViews.swift */; };
 		DCB2E05A26D43B472AA8601F /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1452393C6623E3F83366C1AE /* AppModel.swift */; };
 		E4F28740D01165BE1C1F3D52 /* WatchMindCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7D218EE453ED0DD421BAFA95 /* WatchMindCore */; };
+		E9A176A2F12E64669FC594DB /* WatchMindSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74889D4F70ECFC8E5176FF8B /* WatchMindSmokeUITests.swift */; };
 		EABF24D8A78E1D3F4A8989E3 /* HealthSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD838D663A9EFBA7D3927913 /* HealthSource.swift */; };
 		F56EA3826389D322A0CB7471 /* AudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05736F538AB3C15E86A9E525 /* AudioCapture.swift */; };
 		FEF5B345477010FD66A1B66E /* RecordingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0B69FFD0C77100ADEBDD72 /* RecordingSettingsView.swift */; };
@@ -45,6 +51,20 @@
 			proxyType = 1;
 			remoteGlobalIDString = E4C8D4A7D980EBEE46E5E740;
 			remoteInfo = WatchMindWatch;
+		};
+		6162FEE198C6E9C42D12A07F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5FA77F28B05B18DFA055A659 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 213518E721C4E6B576C6CC96;
+			remoteInfo = WatchMind;
+		};
+		E0EF74DBAF498547CAC31567 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5FA77F28B05B18DFA055A659 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 213518E721C4E6B576C6CC96;
+			remoteInfo = WatchMind;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -64,7 +84,10 @@
 
 /* Begin PBXFileReference section */
 		0174D50091A62C076B3E6C9C /* LocalIntelligence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalIntelligence.swift; sourceTree = "<group>"; };
+		056390F4D50973EBE4554120 /* NativeSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSmokeTests.swift; sourceTree = "<group>"; };
 		05736F538AB3C15E86A9E525 /* AudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCapture.swift; sourceTree = "<group>"; };
+		07777AB2EFF226F635331E14 /* PrivacySupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySupportViews.swift; sourceTree = "<group>"; };
+		0D4898F20EE8FD10CFD70DB8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0D4DF04A40973A1CBA55A967 /* AppModel+Journal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Journal.swift"; sourceTree = "<group>"; };
 		1183099AB2FB299E9D0E621D /* WatchMindWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatchMindWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		11FBF46A2E147098F3D7F756 /* AudioQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioQuality.swift; sourceTree = "<group>"; };
@@ -74,8 +97,10 @@
 		39558AEEF5E60654E8094C35 /* AIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIService.swift; sourceTree = "<group>"; };
 		3B0B69FFD0C77100ADEBDD72 /* RecordingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSettingsView.swift; sourceTree = "<group>"; };
 		433D43CF96E4EE778FBABDFF /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		50E9236951A8CE1CD0E14812 /* WatchMindNativeTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = WatchMindNativeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6601DB8C6EA1DFBEF410537B /* DashboardViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViews.swift; sourceTree = "<group>"; };
 		67AD3B7C5D213AACBE81AB4D /* JournalViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalViews.swift; sourceTree = "<group>"; };
+		74889D4F70ECFC8E5176FF8B /* WatchMindSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMindSmokeUITests.swift; sourceTree = "<group>"; };
 		74DA85858CE38E58EA701C7B /* AvatarViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarViews.swift; sourceTree = "<group>"; };
 		7B0AB28C62310B6B10BAA74D /* WellbeingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WellbeingViews.swift; sourceTree = "<group>"; };
 		846DF7D94289884D2E945480 /* WatchMindWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMindWatchApp.swift; sourceTree = "<group>"; };
@@ -91,6 +116,7 @@
 		F79C94A99BDC61289FE66D69 /* AIReviewViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIReviewViews.swift; sourceTree = "<group>"; };
 		FC67002A3A1F66EBA2ADB47A /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		FCF48223A38C826C2BC3C3CD /* LibraryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViews.swift; sourceTree = "<group>"; };
+		FD73C6D604BB97753093785A /* WatchMindUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = WatchMindUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,6 +125,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				6479D0182FBDCF1633182F0B /* WatchMindCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9D587385A8ADABE95D4C1998 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				04A148F239EAACDAB558DDC3 /* WatchMindCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -117,6 +151,8 @@
 			isa = PBXGroup;
 			children = (
 				9B7E1C08E5D306114294BAB2 /* WatchMind.app */,
+				50E9236951A8CE1CD0E14812 /* WatchMindNativeTests.xctest */,
+				FD73C6D604BB97753093785A /* WatchMindUITests.xctest */,
 				1183099AB2FB299E9D0E621D /* WatchMindWatch.app */,
 			);
 			name = Products;
@@ -140,6 +176,7 @@
 				FCF48223A38C826C2BC3C3CD /* LibraryViews.swift */,
 				0174D50091A62C076B3E6C9C /* LocalIntelligence.swift */,
 				C237E4404ADF91F23429DAB4 /* LocalStore.swift */,
+				07777AB2EFF226F635331E14 /* PrivacySupportViews.swift */,
 				3B0B69FFD0C77100ADEBDD72 /* RecordingSettingsView.swift */,
 				BDA94C254A08FE784113DEC7 /* StorageManagementView.swift */,
 				F62AC2A8AC09566E06295147 /* Views.swift */,
@@ -148,6 +185,22 @@
 				7B0AB28C62310B6B10BAA74D /* WellbeingViews.swift */,
 			);
 			path = iOS;
+			sourceTree = "<group>";
+		};
+		7E7953FF1DA5D8FAE27F8D3A /* NativeTests */ = {
+			isa = PBXGroup;
+			children = (
+				056390F4D50973EBE4554120 /* NativeSmokeTests.swift */,
+			);
+			path = NativeTests;
+			sourceTree = "<group>";
+		};
+		8D7C6183F439983D03F7F4A2 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				74889D4F70ECFC8E5176FF8B /* WatchMindSmokeUITests.swift */,
+			);
+			path = UITests;
 			sourceTree = "<group>";
 		};
 		A0C5453B8D5F57CDCE7BE530 /* Watch */ = {
@@ -163,7 +216,9 @@
 			children = (
 				EE03AC92724426EF281F0926 /* AppResources */,
 				7287758D247B81965AD6E4D7 /* iOS */,
+				7E7953FF1DA5D8FAE27F8D3A /* NativeTests */,
 				A7D4435C5D195F4BD4E737AE /* Packages */,
+				8D7C6183F439983D03F7F4A2 /* UITests */,
 				A0C5453B8D5F57CDCE7BE530 /* Watch */,
 				101444B23532D5C720870CFC /* Products */,
 			);
@@ -180,6 +235,7 @@
 		EE03AC92724426EF281F0926 /* AppResources */ = {
 			isa = PBXGroup;
 			children = (
+				0D4898F20EE8FD10CFD70DB8 /* Assets.xcassets */,
 				433D43CF96E4EE778FBABDFF /* PrivacyInfo.xcprivacy */,
 				DA9EC9C9CDFE6A561B89590A /* InfoPlist.strings */,
 			);
@@ -210,6 +266,44 @@
 			productName = WatchMind;
 			productReference = 9B7E1C08E5D306114294BAB2 /* WatchMind.app */;
 			productType = "com.apple.product-type.application";
+		};
+		3479F58F123DB8838A553B07 /* WatchMindUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 063DC2C8980E32CC59535014 /* Build configuration list for PBXNativeTarget "WatchMindUITests" */;
+			buildPhases = (
+				F0091BD7916328084DD39C70 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9745BD3F908D5C4BC882BF04 /* PBXTargetDependency */,
+			);
+			name = WatchMindUITests;
+			packageProductDependencies = (
+			);
+			productName = WatchMindUITests;
+			productReference = FD73C6D604BB97753093785A /* WatchMindUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		6854C97B33409174D3CF7CD5 /* WatchMindNativeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 18ED3C4B722D228926C9E39F /* Build configuration list for PBXNativeTarget "WatchMindNativeTests" */;
+			buildPhases = (
+				747BD49DE41F2B12CF7870D7 /* Sources */,
+				9D587385A8ADABE95D4C1998 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BA7013EB21F5E368093A5B5E /* PBXTargetDependency */,
+			);
+			name = WatchMindNativeTests;
+			packageProductDependencies = (
+				BC87276A2BC7BA4714F8ABB5 /* WatchMindCore */,
+			);
+			productName = WatchMindNativeTests;
+			productReference = 50E9236951A8CE1CD0E14812 /* WatchMindNativeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 		E4C8D4A7D980EBEE46E5E740 /* WatchMindWatch */ = {
 			isa = PBXNativeTarget;
@@ -244,6 +338,15 @@
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
+					3479F58F123DB8838A553B07 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+						TestTargetID = 213518E721C4E6B576C6CC96;
+					};
+					6854C97B33409174D3CF7CD5 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
 					E4C8D4A7D980EBEE46E5E740 = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
@@ -270,6 +373,8 @@
 			targets = (
 				213518E721C4E6B576C6CC96 /* WatchMind */,
 				E4C8D4A7D980EBEE46E5E740 /* WatchMindWatch */,
+				6854C97B33409174D3CF7CD5 /* WatchMindNativeTests */,
+				3479F58F123DB8838A553B07 /* WatchMindUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -279,6 +384,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6A6362DEE7CC65153D02E7F7 /* Assets.xcassets in Resources */,
 				9D1BDECECF41017025CE0FF3 /* InfoPlist.strings in Resources */,
 				4B7A01A10AD26926FB940261 /* PrivacyInfo.xcprivacy in Resources */,
 			);
@@ -288,6 +394,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B8D2E4CA1403EEF994217327 /* Assets.xcassets in Resources */,
 				ADE911F72C8BC21609574489 /* InfoPlist.strings in Resources */,
 				53922073C2C0209368FF154A /* PrivacyInfo.xcprivacy in Resources */,
 			);
@@ -323,12 +430,29 @@
 				D815B64F881FEA0876ACC80D /* LibraryViews.swift in Sources */,
 				0E52EDB58528E67C5AF3A79E /* LocalIntelligence.swift in Sources */,
 				5F9734C7ADF1F465526DD72C /* LocalStore.swift in Sources */,
+				A4B5DEDBEA811A77A943E2E7 /* PrivacySupportViews.swift in Sources */,
 				FEF5B345477010FD66A1B66E /* RecordingSettingsView.swift in Sources */,
 				26700C27BE86B31C087457B3 /* StorageManagementView.swift in Sources */,
 				931F1BFA85A706ABF4B0582C /* Views.swift in Sources */,
 				D6A0A46871E5F5E63A1A4B53 /* WatchMindApp.swift in Sources */,
 				921DB404AEC575861AB1BD88 /* WatchReceiver.swift in Sources */,
 				AB1E83899AD90D7F4E61183D /* WellbeingViews.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		747BD49DE41F2B12CF7870D7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A52839F4EA5D3B17EB449F5D /* NativeSmokeTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0091BD7916328084DD39C70 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9A176A2F12E64669FC594DB /* WatchMindSmokeUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -339,6 +463,16 @@
 			isa = PBXTargetDependency;
 			target = E4C8D4A7D980EBEE46E5E740 /* WatchMindWatch */;
 			targetProxy = 5484B816C5317D6E76CF7DA9 /* PBXContainerItemProxy */;
+		};
+		9745BD3F908D5C4BC882BF04 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 213518E721C4E6B576C6CC96 /* WatchMind */;
+			targetProxy = E0EF74DBAF498547CAC31567 /* PBXContainerItemProxy */;
+		};
+		BA7013EB21F5E368093A5B5E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 213518E721C4E6B576C6CC96 /* WatchMind */;
+			targetProxy = 6162FEE198C6E9C42D12A07F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -355,6 +489,23 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		2976566890335170DF52AC28 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WATCHMIND_APP_BUNDLE_ID).ui-tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = WatchMind;
+			};
+			name = Release;
+		};
 		2B6EA583E41FEF28A4F8FDDB /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -368,7 +519,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.watchmind.app;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WATCHMIND_APP_BUNDLE_ID)";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -409,7 +560,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -429,7 +580,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.10.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -437,6 +588,11 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+				WATCHMIND_APP_BUNDLE_ID = com.watchmind.app;
+				WATCHMIND_OPERATOR_NAME = "";
+				WATCHMIND_PRIVACY_POLICY_URL = "";
+				WATCHMIND_SUPPORT_URL = "";
+				WATCHMIND_WATCH_BUNDLE_ID = "$(WATCHMIND_APP_BUNDLE_ID).watchkitapp";
 				WATCHOS_DEPLOYMENT_TARGET = 10.0;
 			};
 			name = Debug;
@@ -476,7 +632,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -490,13 +646,18 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.10.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
+				WATCHMIND_APP_BUNDLE_ID = com.watchmind.app;
+				WATCHMIND_OPERATOR_NAME = "";
+				WATCHMIND_PRIVACY_POLICY_URL = "";
+				WATCHMIND_SUPPORT_URL = "";
+				WATCHMIND_WATCH_BUNDLE_ID = "$(WATCHMIND_APP_BUNDLE_ID).watchkitapp";
 				WATCHOS_DEPLOYMENT_TARGET = 10.0;
 			};
 			name = Release;
@@ -504,23 +665,40 @@
 		5945570CAA7B4ADB46443DE6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = WatchAppIcon;
 				CODE_SIGN_ENTITLEMENTS = Config/Watch.entitlements;
 				INFOPLIST_FILE = "Config/Watch-Info.plist";
-				PRODUCT_BUNDLE_IDENTIFIER = com.watchmind.app.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WATCHMIND_WATCH_BUNDLE_ID)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;
 			};
 			name = Debug;
 		};
+		7F335320F0E93529A6942E73 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WATCHMIND_APP_BUNDLE_ID).native-tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WatchMind.app/WatchMind";
+			};
+			name = Debug;
+		};
 		91A086C76E8AD560728A1343 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = WatchAppIcon;
 				CODE_SIGN_ENTITLEMENTS = Config/Watch.entitlements;
 				INFOPLIST_FILE = "Config/Watch-Info.plist";
-				PRODUCT_BUNDLE_IDENTIFIER = com.watchmind.app.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WATCHMIND_WATCH_BUNDLE_ID)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;
@@ -540,15 +718,67 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.watchmind.app;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WATCHMIND_APP_BUNDLE_ID)";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A880446161466B78FF79F44D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WATCHMIND_APP_BUNDLE_ID).native-tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WatchMind.app/WatchMind";
+			};
+			name = Release;
+		};
+		C8B4FE2ADB9E2D47C8D26D2F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(WATCHMIND_APP_BUNDLE_ID).ui-tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = WatchMind;
 			};
 			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		063DC2C8980E32CC59535014 /* Build configuration list for PBXNativeTarget "WatchMindUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C8B4FE2ADB9E2D47C8D26D2F /* Debug */,
+				2976566890335170DF52AC28 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		18ED3C4B722D228926C9E39F /* Build configuration list for PBXNativeTarget "WatchMindNativeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7F335320F0E93529A6942E73 /* Debug */,
+				A880446161466B78FF79F44D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		50B9FFFEB46032690751376B /* Build configuration list for PBXNativeTarget "WatchMind" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -591,6 +821,10 @@
 			productName = WatchMindCore;
 		};
 		9C8720C7989C17BAA75FADCD /* WatchMindCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WatchMindCore;
+		};
+		BC87276A2BC7BA4714F8ABB5 /* WatchMindCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = WatchMindCore;
 		};

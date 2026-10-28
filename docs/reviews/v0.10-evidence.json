@@ -1,0 +1,71 @@
+{
+  "version": "0.10.0",
+  "date_beijing": "2026-10-28",
+  "repaired_review_ids": [
+    "R01",
+    "R02",
+    "R03",
+    "R04",
+    "R05",
+    "R06",
+    "R07",
+    "R08",
+    "R09",
+    "R10",
+    "R11",
+    "R12"
+  ],
+  "validation": {
+    "core_xctest_passed": 142,
+    "appmodel_standin_groups_passed": 32,
+    "network_loopback_passed": 8,
+    "transcription_method_standin_groups_passed": 6,
+    "original_failed_invariants_now_passed": 12,
+    "gateway_tests_passed": 26,
+    "release_configuration_tests_passed": 3,
+    "builder_progress_tests_passed": 4,
+    "localization_app_keys_each": 723,
+    "permission_keys_each": 4,
+    "real_temporary_filesystem_tests_in_core": 13,
+    "native_unit_tests_added_not_run": 2,
+    "native_ui_tests_added_not_run": 3
+  },
+  "capacity_single_executor_synthetic": [
+    {
+      "archive_bytes": 5779832,
+      "decode_ms": 425.3143072128296,
+      "encode_ms": 701.6719579696655,
+      "heart_points": 60000,
+      "incremental_marker_save_ms": 38.94507884979248,
+      "incremental_new_blob_bytes": 158,
+      "incremental_new_blob_count": 1,
+      "incremental_reused_blob_count": 26,
+      "minutes_per_recording": 30,
+      "recordings": 7,
+      "scope": "Synthetic core JSON and real temporary sharded-store I/O; no audio, metrics, AI history or iPhone profiling",
+      "word_segments": 25200
+    },
+    {
+      "archive_bytes": 18708232,
+      "decode_ms": 587.8539085388184,
+      "encode_ms": 1109.359622001648,
+      "heart_points": 60000,
+      "incremental_marker_save_ms": 22.5369930267334,
+      "incremental_new_blob_bytes": 158,
+      "incremental_new_blob_count": 1,
+      "incremental_reused_blob_count": 49,
+      "minutes_per_recording": 60,
+      "recordings": 30,
+      "scope": "Synthetic core JSON and real temporary sharded-store I/O; no audio, metrics, AI history or iPhone profiling",
+      "word_segments": 216000
+    }
+  ],
+  "pending": [
+    "Apple SDK compilation and native tests",
+    "paired-device audio/sensors/power",
+    "real AI providers and billing",
+    "actual publisher/privacy/support settings",
+    "signed Archive, TestFlight, App Store review",
+    "optional quota service deployment"
+  ]
+}

@@ -121,6 +121,10 @@ struct AIReviewComposerView: View {
     private var l: Localizer { Localizer(locale: locale) }
     private var owners: [Episode] { model.visible.filter { $0.linkedRecordingID == nil && $0.captureStarted != nil && $0.captureEnded != nil && ![.recording, .paused, .transcribing].contains($0.status) }.sorted { $0.trigger.date > $1.trigger.date } }
     private var owner: Episode? { owners.first { $0.id == selectedID } }
+    private var sourceRange: AIReviewRange? {
+        guard includeTranscript, let began = owner?.captureStarted, let ended = owner?.captureEnded else { return nil }
+        return AIReviewRange(began: began, ended: ended, start: start, end: end)
+    }
     var body: some View {
         Form {
             Section(l("你想理解什么？")) {
@@ -137,9 +141,9 @@ struct AIReviewComposerView: View {
                         ForEach(owners) { event in Text(l.date(event.captureStarted ?? event.trigger.date, includeDate: true, seconds: true)).tag(Optional(event.id)) }
                     }.onChange(of: selectedID) { _, _ in selectRecording() }
                 }
-                DatePicker(l("片段开始"), selection: $start)
-                DatePicker(l("片段结束"), selection: $end)
-                if includeTranscript, let owner, let began = owner.captureStarted, let ended = owner.captureEnded, ended.timeIntervalSince(began) > 0.1 {
+                DatePicker(l("片段开始"), selection: Binding(get: { sourceRange?.start ?? start }, set: { setRangeStart($0) }))
+                DatePicker(l("片段结束"), selection: Binding(get: { sourceRange?.end ?? end }, set: { setRangeEnd($0) }))
+                if includeTranscript, let owner, let began = owner.captureStarted, let ended = owner.captureEnded, ended.timeIntervalSince(began) >= 0.2 {
                     preciseRange(began: began, ended: ended)
                 }
                 Text(l("最长选择24小时。文字按实际转写句段重叠提取，边界句可能超出所选范围；没有逐字对齐时不伪造精确截字。"))
@@ -165,18 +169,28 @@ struct AIReviewComposerView: View {
             }
         }.navigationTitle(l("新建 AI 复盘"))
             .onAppear { if let recordingID, selectedID == nil { selectedID = recordingID; includeTranscript = true; selectRecording() } }
+            .onChange(of: includeTranscript) { _, enabled in if enabled { setRangeStart(start); setRangeEnd(end) } }
             .sheet(item: $draft) { draft in NavigationStack { AIReviewRunView(evidence: draft.evidence, initialGoal: draft.goal) } }
     }
-    private func preciseRange(began: Date, ended: Date) -> some View {
-        let length = ended.timeIntervalSince(began)
-        return VStack(alignment: .leading, spacing: 12) {
+    @ViewBuilder private func preciseRange(began: Date, ended: Date) -> some View {
+        if let range = AIReviewRange(began: began, ended: ended, start: start, end: end) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(l("精细选段（秒）")).font(.subheadline.bold())
-            Slider(value: Binding(get: { max(0, min(length, start.timeIntervalSince(began))) }, set: { start = began.addingTimeInterval(min($0, length - 0.1)); if end < start.addingTimeInterval(0.1) { end = min(ended, start.addingTimeInterval(0.1)) } }), in: 0...max(0.001, length - 0.1), step: 0.1)
+            Slider(value: Binding(get: { range.startOffset }, set: { setRangeStart(began.addingTimeInterval($0)) }), in: range.startOffsets, step: 0.1)
                 .accessibilityLabel(l("片段开始"))
-            Slider(value: Binding(get: { max(0, min(length, end.timeIntervalSince(began))) }, set: { end = began.addingTimeInterval(max(0.1, $0)); if start > end.addingTimeInterval(-0.1) { start = max(began, end.addingTimeInterval(-0.1)) } }), in: 0.1...length, step: 0.1)
+            Slider(value: Binding(get: { range.endOffset }, set: { setRangeEnd(began.addingTimeInterval($0)) }), in: range.endOffsets, step: 0.1)
                 .accessibilityLabel(l("片段结束"))
-            Text(String(format: "%.1f – %.1f s", start.timeIntervalSince(began), end.timeIntervalSince(began))).monospacedDigit()
+            Text(String(format: "%.1f – %.1f s", range.startOffset, range.endOffset)).monospacedDigit()
         }
+        }
+    }
+    private func setRangeStart(_ value: Date) {
+        if var range = sourceRange { range.setStart(value); start = range.start; end = range.end }
+        else { start = value }
+    }
+    private func setRangeEnd(_ value: Date) {
+        if var range = sourceRange { range.setEnd(value); start = range.start; end = range.end }
+        else { end = value }
     }
     private func selectRecording() {
         guard let owner, let began = owner.captureStarted, let ended = owner.captureEnded else { return }
@@ -184,7 +198,7 @@ struct AIReviewComposerView: View {
     }
     private func prepare() {
         do {
-            let selection = AIReviewSelection(recordingID: selectedID, start: start, end: end, includeTranscript: includeTranscript, includeHeart: includeHeart, metricKinds: Array(kinds), question: question)
+            let selection = AIReviewSelection(recordingID: selectedID, start: sourceRange?.start ?? start, end: sourceRange?.end ?? end, includeTranscript: includeTranscript, includeHeart: includeHeart, metricKinds: Array(kinds), question: question)
             let evidence = try AIReviewEvidence.build(selection: selection, episodes: model.visible, heartPoints: model.heartPoints, metrics: model.visibleMetrics, isDemo: model.demoMode)
             failure = nil; draft = .init(evidence: evidence, goal: goal)
         } catch { failure = AIReviewService.errorMessage(error, language: l.language) }
@@ -212,10 +226,14 @@ struct AIReviewRunView: View {
                 Text(l.date(evidence.selection.start, includeDate: true, seconds: true) + " — " + l.date(evidence.selection.end, includeDate: true, seconds: true))
                 if evidence.isDemo { Label(l("模拟数据"), systemImage: "flask") }
                 Text(l("原话 \(evidence.transcript.count) 段 · 心率 \(evidence.heartPoints.count) 点 · 健康样本 \(evidence.metrics.count) 条"))
+                Text(l("连续语词合并为短句，保留全部文字、所选样本和录音空档；完整输入包含单位与聚合窗口。"))
+                    .font(.caption).foregroundStyle(.secondary)
                 ForEach(Array(evidence.transcript.enumerated()), id: \.offset) { _, quote in
                     VStack(alignment: .leading) { Text(l.date(quote.start, seconds: true)).font(.caption); Text(quote.text).textSelection(.enabled) }
                 }
-                if !evidence.audioWindows.isEmpty && !evidence.isDemo {
+                if !evidence.audioWindows.isEmpty && !evidence.isDemo,
+                   let sourceID = evidence.selection.recordingID,
+                   let source = model.visible.first(where: { $0.id == sourceID }), source.audioPurgedAt == nil, source.cleanupPending != true {
                     Button(model.playingID == playbackID ? l("停止播放") : l("试听所选范围")) { model.previewReview(evidence, playbackID: playbackID) }.disabled(model.recordingID != nil)
                 }
                 ForEach(evidence.metrics) { reading in MetricRow(kind: reading.kind, reading: reading, at: evidence.selection.end) }
@@ -223,6 +241,10 @@ struct AIReviewRunView: View {
             }
             Section(l("分析方式")) {
                 NavigationLink { AISettingsView() } label: { LabeledContent(l("模型服务"), value: providerTitle(settings.configuration.provider, l)) }
+                if settings.configuration.provider == .apple {
+                    Text(l("本机模型按上下文预算分批分析，再合并复盘；不会遗漏所选片段，较长输入可能需要更多时间。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if settings.configuration.provider != .apple {
                     Text(settings.configuration.baseURL).font(.caption).textSelection(.enabled)
                     Text(l("只发送上述文字、选定身体信号、历史基线和问题；不发送原始音频。服务商会按其政策处理，可能产生费用。"))
@@ -268,7 +290,8 @@ struct AIReviewRunView: View {
     }
     private func persist() {
         guard let configuration = usedConfiguration, let language = usedLanguage else { return }
-        let record = AIReviewRecord(id: resultID, createdAt: resultDate, evidence: evidence, goal: initialGoal, text: result, provider: configuration.provider, model: configuration.model, language: language.rawValue)
+        let record = AIReviewRecord(id: resultID, createdAt: resultDate, evidence: evidence, goal: initialGoal, text: result, provider: configuration.provider, model: configuration.model, language: language.rawValue,
+                                    endpoint: (try? configuration.chatCompletionsURL())?.absoluteString)
         saved = model.saveAIReview(record)
         if !saved { failure = l("结果尚未保存：请检查存储状态、来源是否仍在，以及是否达到200份复盘上限。请先导出结果。") }
         else { failure = nil }
@@ -289,6 +312,7 @@ struct AIReviewDetailView: View {
                     Text(review.text).textSelection(.enabled)
                     Text(providerTitle(review.provider, l) + (review.model.isEmpty ? "" : " · " + review.model)).font(.caption).foregroundStyle(.secondary)
                     Text(l.date(review.createdAt, includeDate: true)).font(.caption)
+                    if let endpoint = review.endpoint { Text(l("分析接口：\(endpoint)")).font(.caption).textSelection(.enabled) }
                     if review.evidence.isDemo { Text(l("模拟数据")) }
                     ShareLink(item: review.text) { Label(l("导出这份复盘"), systemImage: "square.and.arrow.up") }
                 }

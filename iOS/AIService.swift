@@ -122,13 +122,24 @@ enum AIReviewService {
             #if canImport(FoundationModels)
             if #available(iOS 26.0, *), case .available = SystemLanguageModel.default.availability {
                 do {
-                    let instructions = messages.filter { $0.role == "system" }.map(\.content).joined(separator: "\n")
-                    let input = messages.filter { $0.role != "system" }.map(\.content).joined(separator: "\n")
-                    let session = LanguageModelSession(instructions: instructions)
-                    let result = try await session.respond(to: input)
-                    try Task.checkCancellation()
-                    let content = result.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !content.isEmpty, content.count <= 12000 else { throw AIServiceError.invalidResponse }
+                    let batches = try evidence.localBatches()
+                    var summaries: [String] = []
+                    for batch in batches {
+                        try Task.checkCancellation()
+                        summaries.append(try await localResponse(instructions: AIReviewPrompt.localInstructions(goal: goal, language: language), input: batch.preview))
+                    }
+                    while summaries.count > 1 {
+                        var reduced: [String] = []
+                        for index in stride(from: 0, to: summaries.count, by: 2) {
+                            try Task.checkCancellation()
+                            if index + 1 == summaries.count { reduced.append(summaries[index]); continue }
+                            let input = summaries[index] + "\n\n" + summaries[index + 1]
+                            guard input.count <= 3400 else { throw AIServiceError.localGeneration }
+                            reduced.append(try await localResponse(instructions: AIReviewPrompt.reductionInstructions(language: language), input: input))
+                        }
+                        summaries = reduced
+                    }
+                    guard let content = summaries.first else { throw AIServiceError.invalidResponse }
                     return content
                 } catch is CancellationError { throw CancellationError() }
                 catch let error as AIServiceError { throw error }
@@ -159,6 +170,18 @@ enum AIReviewService {
         do { return try OpenAIReviewCodec.response(data) }
         catch { throw AIServiceError.invalidResponse }
     }
+
+    #if canImport(FoundationModels)
+    @available(iOS 26.0, *)
+    private static func localResponse(instructions: String, input: String) async throws -> String {
+        let session = LanguageModelSession(instructions: instructions)
+        let response = try await session.respond(to: input, options: GenerationOptions(maximumResponseTokens: 400))
+        try Task.checkCancellation()
+        let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, text.count <= 1600 else { throw AIServiceError.invalidResponse }
+        return text
+    }
+    #endif
 
     /// Never displays raw provider responses or localizedDescription, which can contain request details.
     static func errorMessage(_ error: Error, language: AppLanguage) -> String {

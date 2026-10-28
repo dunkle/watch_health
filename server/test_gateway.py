@@ -8,6 +8,7 @@ import time
 import threading
 import unittest
 from datetime import datetime, timedelta, timezone
+from dataclasses import replace
 from pathlib import Path
 from gateway import Configuration, Gateway, Quota, validate_payload, normalize_response, NoRedirect
 
@@ -28,6 +29,8 @@ class GatewayTests(unittest.TestCase):
             self.calls.append(body)
             if self.mode == "failure":
                 raise ValueError("secret provider diagnostic")
+            if self.mode == "timeout":
+                raise TimeoutError("secret timeout diagnostic")
             if self.mode == "malformed":
                 return {"secret": "provider key"}
             return {"choices": [{"message": {"content": "A tentative interpretation"}}], "private_debug": "hidden"}
@@ -37,6 +40,13 @@ class GatewayTests(unittest.TestCase):
         self.server = Gateway(("127.0.0.1", 0), self.config, upstream)
         self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
         self.thread.start()
+
+    def configure_limits(self, **limits):
+        self.config = replace(self.config, **limits).validate()
+        self.server.config = self.config
+        self.server.quota = Quota(self.config.database, self.config.daily_limit, self.config.attempt_limit,
+                                  self.config.account_rate_limit, self.config.global_daily_attempt_limit,
+                                  self.config.breaker_failure_limit, self.config.breaker_cooldown_seconds)
 
     def tearDown(self):
         self.server.shutdown()
@@ -70,6 +80,7 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(self.request()[0], 200)
 
     def test_failure_releases_allowance_and_sanitizes_error(self):
+        self.configure_limits(daily_attempt_limit=8, account_rate_limit=8, breaker_failure_limit=10)
         self.mode = "failure"
         for _ in range(3):
             status, result = self.request()
@@ -80,6 +91,7 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(self.request()[0], 200)
 
     def test_bad_provider_response_does_not_consume_quota(self):
+        self.configure_limits(daily_attempt_limit=3)
         self.mode = "malformed"
         self.assertEqual(self.request()[0], 502)
         self.mode = "success"
@@ -132,6 +144,62 @@ class GatewayTests(unittest.TestCase):
         conn.close()
         self.assertEqual(self.request(path="/other")[0], 404)
 
+    def test_unusable_outputs_cannot_refund_paid_attempts(self):
+        self.mode = "malformed"
+        self.assertEqual(self.request()[0], 502)
+        self.assertEqual(self.request()[0], 502)
+        status, body = self.request()
+        self.assertEqual(status, 429)
+        self.assertEqual(body["error"]["code"], "daily_attempt_budget_exhausted")
+        self.assertEqual(len(self.calls), 2)
+        # Restarting quota state with the same durable DB cannot reset the budget.
+        self.configure_limits()
+        self.assertEqual(self.request()[0], 429)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_timeouts_also_spend_attempt_budget_without_leaking_details(self):
+        self.mode = "timeout"
+        for _ in range(2):
+            status, result = self.request()
+            self.assertEqual(status, 502)
+            self.assertNotIn("secret", json.dumps(result))
+        self.assertEqual(self.request()[0], 429)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_explicit_extra_attempts_do_not_increase_success_allowance(self):
+        self.configure_limits(daily_attempt_limit=4, account_rate_limit=4)
+        self.mode = "malformed"
+        self.assertEqual(self.request()[0], 502)
+        self.mode = "success"
+        self.assertEqual(self.request()[0], 200)
+        self.assertEqual(self.request()[0], 200)
+        status, body = self.request()
+        self.assertEqual(status, 429)
+        self.assertEqual(body["error"]["code"], "daily_quota_exhausted")
+        self.assertEqual(len(self.calls), 3)
+
+    def test_account_rate_limit_is_enforced_before_upstream(self):
+        self.configure_limits(daily_limit=10, daily_attempt_limit=10, account_rate_limit=1)
+        self.assertEqual(self.request()[0], 200)
+        status, body = self.request()
+        self.assertEqual(status, 429)
+        self.assertEqual(body["error"]["code"], "account_rate_limited")
+        self.assertEqual(len(self.calls), 1)
+
+    def test_failure_circuit_blocks_other_accounts_until_cooldown(self):
+        self.configure_limits(daily_attempt_limit=10, breaker_failure_limit=1)
+        self.mode = "failure"
+        self.assertEqual(self.request()[0], 502)
+        status, body = self.request()
+        self.assertEqual(status, 503)
+        self.assertEqual(body["error"]["code"], "provider_circuit_open")
+        self.assertEqual(len(self.calls), 1)
+
+    def test_revoked_token_cannot_spend_allowance(self):
+        self.server.config = replace(self.config, clients={"replacement-token-" + "b" * 32: "user_1"})
+        self.assertEqual(self.request()[0], 401)
+        self.assertEqual(self.calls, [])
+
 
 class QuotaTests(unittest.TestCase):
     def test_atomic_concurrent_reservations_and_crash_retention(self):
@@ -158,7 +226,7 @@ class QuotaTests(unittest.TestCase):
     def test_released_reservation_and_retention(self):
         with tempfile.TemporaryDirectory() as temp:
             path = str(Path(temp) / "quota.sqlite3")
-            quota = Quota(path, 1)
+            quota = Quota(path, 1, attempt_limit=2)
             now = datetime(2026, 10, 28, tzinfo=timezone.utc)
             request = quota.reserve("account", now)
             quota.finish(request, False)
@@ -166,6 +234,78 @@ class QuotaTests(unittest.TestCase):
             quota.reserve("account", now + timedelta(days=31))
             with sqlite3.connect(path) as db:
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM requests").fetchone()[0], 1)
+
+    def test_attempt_budget_is_atomic_and_conservative_on_crash_and_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = str(Path(temp) / "quota.sqlite3")
+            quota = Quota(path, 10, attempt_limit=3, rate_limit=100)
+            now = datetime(2026, 10, 28, 12, tzinfo=timezone.utc)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+                results = list(pool.map(lambda _: quota.reserve("account", now), range(12)))
+            accepted = [r for r in results if r]
+            self.assertEqual(len(accepted), 3)
+            quota.finish(accepted[0], False, now)
+            quota.finish(accepted[1], True, now)
+            restarted = Quota(path, 10, attempt_limit=3, rate_limit=100)
+            self.assertIsNone(restarted.reserve("account", now))
+            self.assertIsNotNone(restarted.reserve("account", now + timedelta(days=1)))
+            self.assertIsNotNone(restarted.reserve("other_account", now))
+
+    def test_global_attempt_budget_is_shared_and_survives_refunds(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = str(Path(temp) / "quota.sqlite3")
+            quota = Quota(path, 10, attempt_limit=10, rate_limit=100, global_limit=2)
+            now = datetime(2026, 10, 28, 12, tzinfo=timezone.utc)
+            a = quota.reserve("a", now)
+            b = quota.reserve("b", now)
+            quota.finish(a, False, now)
+            quota.finish(b, False, now)
+            self.assertEqual(quota.reserve_with_reason("c", now), (None, "service_attempt_budget_exhausted"))
+            self.assertIsNotNone(quota.reserve("c", now + timedelta(days=1)))
+
+    def test_global_budget_is_atomic_across_concurrent_accounts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            quota = Quota(str(Path(temp) / "quota.sqlite3"), 10, attempt_limit=10, global_limit=3)
+            now = datetime(2026, 10, 28, 12, tzinfo=timezone.utc)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+                requests = list(pool.map(lambda i: quota.reserve(f"account_{i}", now), range(12)))
+            self.assertEqual(sum(r is not None for r in requests), 3)
+
+    def test_sliding_rate_limit_crosses_utc_day_without_reset(self):
+        with tempfile.TemporaryDirectory() as temp:
+            quota = Quota(str(Path(temp) / "quota.sqlite3"), 10, attempt_limit=10, rate_limit=1)
+            now = datetime(2026, 10, 28, 23, 59, 50, tzinfo=timezone.utc)
+            request = quota.reserve("a", now)
+            quota.finish(request, False, now)
+            self.assertEqual(quota.reserve_with_reason("a", now + timedelta(seconds=20)), (None, "account_rate_limited"))
+            self.assertIsNotNone(quota.reserve("a", now + timedelta(seconds=60)))
+
+    def test_circuit_is_durable_idempotent_and_allows_cooldown_recovery(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = str(Path(temp) / "quota.sqlite3")
+            quota = Quota(path, 10, attempt_limit=10, rate_limit=100, breaker_failures=2, breaker_seconds=60)
+            now = datetime(2026, 10, 28, 12, tzinfo=timezone.utc)
+            a, b, old_success = [quota.reserve("a", now) for _ in range(3)]
+            quota.finish(a, False, now)
+            quota.finish(a, False, now) # A duplicate completion cannot count as another failure.
+            self.assertIsNotNone(quota.reserve("b", now))
+            quota.finish(b, False, now)
+            quota.finish(old_success, True, now) # Already-open circuit cannot be cleared by earlier in-flight work.
+            restarted = Quota(path, 10, attempt_limit=10, rate_limit=100, breaker_failures=2, breaker_seconds=60)
+            self.assertEqual(restarted.reserve_with_reason("c", now), (None, "provider_circuit_open"))
+            self.assertIsNotNone(restarted.reserve("c", now + timedelta(seconds=60)))
+
+    def test_old_schema_migrates_without_resetting_used_allowance(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = str(Path(temp) / "quota.sqlite3")
+            now = datetime(2026, 10, 28, tzinfo=timezone.utc)
+            with sqlite3.connect(path) as db:
+                db.execute("CREATE TABLE requests (id TEXT PRIMARY KEY, account TEXT NOT NULL, day TEXT NOT NULL, status TEXT NOT NULL)")
+                import hashlib
+                db.execute("INSERT INTO requests VALUES (?,?,?,?)", ("legacy", hashlib.sha256(b"a").hexdigest(), "2026-10-28", "reserved"))
+            quota = Quota(path, 1)
+            self.assertIsNone(quota.reserve("a", now))
+            self.assertIsNotNone(quota.reserve("a", now + timedelta(days=1)))
 
 
 class ValidationTests(unittest.TestCase):

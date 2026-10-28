@@ -12,6 +12,8 @@ public struct SleepInterval: Sendable {
     }
 }
 public struct SleepEstimate: Sendable {
+    public var night: Date
+    public var source: String
     public var end: Date
     public var asleepSeconds: Double
     public var efficiency: Double?
@@ -23,8 +25,12 @@ public enum SleepScorer {
     public static func estimates(_ intervals: [SleepInterval], targetHours: Double = 8,
                                  calendar: Calendar = .current) -> [SleepEstimate] {
         let valid = intervals.filter { $0.end > $0.start && $0.end.timeIntervalSince($0.start) <= 18 * 3600 }
-        let days = Dictionary(grouping: valid) { calendar.startOfDay(for: $0.end.addingTimeInterval(-12 * 3600)) }
-        return days.values.compactMap { night in
+        let days = Dictionary(grouping: valid) { interval -> Date in
+            let day = calendar.startOfDay(for: interval.end)
+            return calendar.component(.hour, from: interval.end) < 12
+                ? (calendar.date(byAdding: .day, value: -1, to: day) ?? day) : day
+        }
+        return days.compactMap { nightDate, night in
             let sources = Dictionary(grouping: night, by: \.source).values.filter { $0.contains { $0.state == .asleep } }
             guard let preferred = sources.max(by: { a, b in
                 let aPriority = a.map(\.priority).max() ?? 0, bPriority = b.map(\.priority).max() ?? 0
@@ -55,7 +61,7 @@ public enum SleepScorer {
             let efficiency: Double? = bedSeconds >= seconds ? min(1, seconds / bedSeconds) : nil
             let duration = min(1, seconds / (max(1, targetHours) * 3600))
             let score = (efficiency.map { 0.75 * duration + 0.25 * $0 } ?? duration) * 100
-            return SleepEstimate(end: last.upperBound, asleepSeconds: seconds, efficiency: efficiency, score: score)
+            return SleepEstimate(night: nightDate, source: preferred.first?.source ?? "unknown", end: last.upperBound, asleepSeconds: seconds, efficiency: efficiency, score: score)
         }.sorted { $0.end < $1.end }
     }
     private static func union(_ ranges: [Range<Date>]) -> [Range<Date>] {

@@ -51,7 +51,10 @@ public enum Insights {
         let dayClips = clips.filter { clip in clip.confirmed && Calendar.current.isDate(clip.date, inSameDayAs: day) && universe.contains(where: { event in event.id == clip.recordingID }) }
         let manual = dayMarkers.map { "• " + l.date($0.date) + " · " + $0.note + " · " + $0.context(in: universe).map(\.text).joined(separator: " ") }
         let highlights = dayClips.map { "• " + l.date($0.date) + " · " + $0.text }
-        let text = l("今天记录了 \(events.count) 次心率波动，其中 \(available.count) 次有可用语音。\n")
+        let preface = events.allSatisfy { $0.trigger.hasValidMeasurements }
+            ? l("今天记录了 \(events.count) 次心率波动，其中 \(available.count) 次有可用语音。\n")
+            : l("今天有 \(events.count) 条记录，其中 \(available.count) 条有可用语音；部分历史心率值不可用，不作为身体变化证据。\n")
+        let text = preface
             + (feelings.isEmpty ? l("尚无本人确认的感受，不能据此判断心情。") : l("本人标记的感受：\(feelings.joined(separator: l("、")))。"))
             + (contexts.isEmpty ? l("\n暂无可总结的语音上下文。") : l("\n语音回顾：\n\(contexts)"))
             + l("\n摘要只描述实际记录的片段，未采集的生活保持未知。原始音频可能按所选策略清理，文字仍保留。心率不证明情绪或因果。")

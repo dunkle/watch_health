@@ -37,5 +37,11 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>WatchMindOperatorName</key>
+	<string>$(WATCHMIND_OPERATOR_NAME)</string>
+	<key>WatchMindPrivacyPolicyURL</key>
+	<string>$(WATCHMIND_PRIVACY_POLICY_URL)</string>
+	<key>WatchMindSupportURL</key>
+	<string>$(WATCHMIND_SUPPORT_URL)</string>
 </dict>
 </plist>

@@ -96,6 +96,7 @@ struct HealthOverviewView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.locale) private var locale
     @State private var chosenBlock: Date?
+    @State private var showSignalList = false
     private var l: Localizer { Localizer(locale: locale) }
     private var now: Date { min(Date(), Calendar.current.dateInterval(of: .day, for: model.selectedDay)?.end ?? Date()) }
     private var blocks: [LifeBlock] { HealthReview.canvas(day: model.selectedDay, hearts: model.heartPoints.filter { $0.isDemo == model.demoMode }, readings: model.visibleMetrics) }
@@ -103,17 +104,48 @@ struct HealthOverviewView: View {
         List {
             DatePicker(l("查看日期"), selection: $model.selectedDay, displayedComponents: .date)
             Section(l("一天的数据拼图")) {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 12), spacing: 4) {
+                Toggle(l("使用可访问时段列表"), isOn: $showSignalList)
+                    .accessibilityIdentifier("health-signal-list-toggle")
+                if let block = blocks.first(where: { $0.start == chosenBlock }) { Text(signalLabel(block)).accessibilityIdentifier("health-selected-signal") }
+                if showSignalList {
                     ForEach(blocks) { block in
                         Button { chosenBlock = block.start } label: {
-                            RoundedRectangle(cornerRadius: 3).fill(block.signal == .activity ? Color.orange : block.signal == .heart ? Color.teal : Color(uiColor: .tertiarySystemFill))
-                                .frame(height: 16).overlay { if chosenBlock == block.start { RoundedRectangle(cornerRadius: 3).stroke(.primary, lineWidth: 2) } }
-                        }.buttonStyle(.plain).accessibilityLabel(l("\(l.date(block.start))，\(block.sampleCount) 个心率点"))
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: signalIcon(block.signal)).foregroundStyle(signalColor(block.signal))
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(l.date(block.start) + " – " + l.date(block.end))
+                                    Text(signalTitle(block.signal)).font(.subheadline).foregroundStyle(.secondary)
+                                    Text(l("\(block.sampleCount) 个心率点")).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 0)
+                                if chosenBlock == block.start { Image(systemName: "checkmark.circle.fill").foregroundStyle(.teal) }
+                            }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                        }.buttonStyle(.plain).accessibilityElement(children: .ignore)
+                            .accessibilityLabel(signalLabel(block))
+                            .accessibilityIdentifier("health-signal-cell")
+                            .accessibilityAddTraits(chosenBlock == block.start ? [.isSelected] : [])
+                    }
+                } else {
+                    LazyVGrid(columns: [.init(.adaptive(minimum: 44), spacing: 6)], spacing: 6) {
+                        ForEach(blocks) { block in
+                            Button { chosenBlock = block.start } label: {
+                                VStack(spacing: 3) {
+                                    RoundedRectangle(cornerRadius: 5).fill(signalColor(block.signal))
+                                        .frame(height: 24)
+                                        .overlay { Image(systemName: signalIcon(block.signal)).font(.caption2).foregroundStyle(block.signal == .unknown ? Color.secondary : Color.white) }
+                                        .overlay { if chosenBlock == block.start { RoundedRectangle(cornerRadius: 5).stroke(.primary, lineWidth: 2) } }
+                                    Text(l.date(block.start)).font(.caption2).lineLimit(1).minimumScaleFactor(0.7)
+                                }.frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                            }.buttonStyle(.plain).accessibilityElement(children: .ignore)
+                                .accessibilityLabel(signalLabel(block))
+                                .accessibilityIdentifier("health-signal-cell")
+                                .accessibilityHint(l("选择后查看该时段的实际线索。"))
+                                .accessibilityAddTraits(chosenBlock == block.start ? [.isSelected] : [])
+                        }
                     }
                 }
                 Text(l("每格10分钟：橙色有活动聚合线索，绿色有心率点，灰色无可用线索。不推断专注、情绪或具体行为。"))
                     .font(.caption).foregroundStyle(.secondary)
-                if let block = blocks.first(where: { $0.start == chosenBlock }) { Text(l("\(l.date(block.start)) – \(l.date(block.end))：\(block.sampleCount) 个心率点")) }
             }
             Section(l("个人趋势与证据")) {
                 ForEach([MetricKind.sleepScore, .hrv, .wristTemperature], id: \.self) { kind in
@@ -132,6 +164,23 @@ struct HealthOverviewView: View {
             NavigationLink(l("查看原始健康指标")) { HealthMetricsView() }
         }.navigationTitle(l("健康趋势与日常安排"))
     }
+    private func signalTitle(_ signal: LifeBlock.Signal) -> String {
+        switch signal {
+        case .activity: return l("有活动聚合线索")
+        case .heart: return l("有心率样本")
+        case .unknown: return l("没有可用线索")
+        }
+    }
+    private func signalIcon(_ signal: LifeBlock.Signal) -> String {
+        switch signal { case .activity: return "figure.walk"; case .heart: return "heart.fill"; case .unknown: return "questionmark" }
+    }
+    private func signalColor(_ signal: LifeBlock.Signal) -> Color {
+        switch signal { case .activity: return .orange; case .heart: return .teal; case .unknown: return Color(uiColor: .tertiarySystemFill) }
+    }
+    private func signalLabel(_ block: LifeBlock) -> String {
+        l("\(l.date(block.start)) – \(l.date(block.end))，\(signalTitle(block.signal))，\(block.sampleCount) 个心率点")
+    }
+
 }
 struct HealthTrendRow: View {
     @EnvironmentObject private var model: AppModel
@@ -139,7 +188,7 @@ struct HealthTrendRow: View {
     let kind: MetricKind
     let at: Date
     private var l: Localizer { Localizer(locale: locale) }
-    private var points: [MetricReading] { model.visibleMetrics.filter { $0.kind == kind && kind.accepts($0.value) && $0.date <= at && $0.date >= at.addingTimeInterval(-14 * 86400) }.sorted { $0.date < $1.date } }
+    private var points: [MetricReading] { model.visibleMetrics.filter { $0.kind == kind && kind.accepts($0.value) && $0.date <= at && $0.date >= ContextAlgorithm.historyStart(before: at) }.sorted { $0.date < $1.date } }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(l.key(kind.title)).font(.headline)

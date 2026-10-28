@@ -35,6 +35,16 @@ class Configuration:
     database: str
     daily_limit: int = 3
     max_inflight: int = 8
+    # None deliberately means no more paid attempts than the successful-result allowance.
+    daily_attempt_limit: int | None = None
+    account_rate_limit: int = 3
+    global_daily_attempt_limit: int = 1000
+    breaker_failure_limit: int = 5
+    breaker_cooldown_seconds: int = 60
+
+    @property
+    def attempt_limit(self):
+        return self.daily_limit if self.daily_attempt_limit is None else self.daily_attempt_limit
 
     def validate(self):
         url = urllib.parse.urlsplit(self.upstream_url)
@@ -52,8 +62,12 @@ class Configuration:
                     or any(c.isspace() for c in token)
                     or not isinstance(account, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", account)):
                 raise ValueError("Use strong ASCII bearer tokens and opaque account IDs")
-        if not 1 <= self.daily_limit <= 1000 or not 1 <= self.max_inflight <= 64:
-            raise ValueError("Quota or concurrency out of range")
+        limits = [(self.daily_limit, 1, 1000), (self.max_inflight, 1, 64),
+                  (self.attempt_limit, 1, 10000), (self.account_rate_limit, 1, 1000),
+                  (self.global_daily_attempt_limit, 1, 1000000),
+                  (self.breaker_failure_limit, 1, 1000), (self.breaker_cooldown_seconds, 1, 3600)]
+        if any(type(value) is not int or not lower <= value <= upper for value, lower, upper in limits):
+            raise ValueError("Quota, rate, circuit, or concurrency out of range")
         return self
 
     @classmethod
@@ -66,16 +80,38 @@ class Configuration:
             database=os.environ.get("WATCHMIND_QUOTA_DB", "./quota.sqlite3"),
             daily_limit=int(os.environ.get("WATCHMIND_DAILY_LIMIT", "3")),
             max_inflight=int(os.environ.get("WATCHMIND_MAX_INFLIGHT", "8")),
+            daily_attempt_limit=int(os.environ["WATCHMIND_DAILY_ATTEMPT_LIMIT"]) if "WATCHMIND_DAILY_ATTEMPT_LIMIT" in os.environ else None,
+            account_rate_limit=int(os.environ.get("WATCHMIND_ACCOUNT_RATE_LIMIT", "3")),
+            global_daily_attempt_limit=int(os.environ.get("WATCHMIND_GLOBAL_DAILY_ATTEMPT_LIMIT", "1000")),
+            breaker_failure_limit=int(os.environ.get("WATCHMIND_BREAKER_FAILURE_LIMIT", "5")),
+            breaker_cooldown_seconds=int(os.environ.get("WATCHMIND_BREAKER_COOLDOWN_SECONDS", "60")),
         ).validate()
 
 
 class Quota:
-    """Reservations survive process death; they fail closed until their UTC day ends."""
-    def __init__(self, path: str, limit: int):
+    """Durable result/attempt budgets, rate limiting, and a provider circuit breaker.
+
+    Every accepted attempt is charged before upstream execution. Failure refunds only
+    the result allowance, never the attempt budget. Reservations survive process death.
+    """
+    def __init__(self, path: str, limit: int, attempt_limit: int | None = None,
+                 rate_limit: int = 3, global_limit: int = 1000,
+                 breaker_failures: int = 5, breaker_seconds: int = 60):
         self.path, self.limit = path, limit
+        self.attempt_limit = limit if attempt_limit is None else attempt_limit
+        self.rate_limit, self.global_limit = rate_limit, global_limit
+        self.breaker_failures, self.breaker_seconds = breaker_failures, breaker_seconds
         with self._db() as db:
-            db.execute("CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, account TEXT NOT NULL, day TEXT NOT NULL, status TEXT NOT NULL)")
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, account TEXT NOT NULL, day TEXT NOT NULL, status TEXT NOT NULL, started_at REAL NOT NULL DEFAULT 0)")
+            # Existing successful/reserved records conservatively count as spent attempts.
+            if "started_at" not in {row[1] for row in db.execute("PRAGMA table_info(requests)")}:
+                db.execute("ALTER TABLE requests ADD COLUMN started_at REAL NOT NULL DEFAULT 0")
             db.execute("CREATE INDEX IF NOT EXISTS requests_account_day ON requests(account, day)")
+            db.execute("CREATE INDEX IF NOT EXISTS requests_day ON requests(day)")
+            db.execute("CREATE INDEX IF NOT EXISTS requests_account_time ON requests(account, started_at)")
+            db.execute("CREATE TABLE IF NOT EXISTS circuit (id INTEGER PRIMARY KEY CHECK(id=1), failures INTEGER NOT NULL, open_until REAL NOT NULL)")
+            db.execute("INSERT OR IGNORE INTO circuit VALUES (1, 0, 0)")
         os.chmod(path, 0o600)
 
     @contextmanager
@@ -88,7 +124,13 @@ class Quota:
             db.close()
 
     def reserve(self, account: str, now=None):
+        return self.reserve_with_reason(account, now)[0]
+
+    def reserve_with_reason(self, account: str, now=None):
         now = now or datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            raise ValueError("An aware UTC-compatible time is required")
+        timestamp = now.timestamp()
         day = now.astimezone(timezone.utc).date().isoformat()
         cutoff = (now.astimezone(timezone.utc).date() - timedelta(days=30)).isoformat()
         digest = hashlib.sha256(account.encode()).hexdigest()
@@ -96,18 +138,46 @@ class Quota:
         with self._db() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute("DELETE FROM requests WHERE day < ?", (cutoff,))
-            count = db.execute("SELECT COUNT(*) FROM requests WHERE account=? AND day=?", (digest, day)).fetchone()[0]
-            if count >= self.limit:
-                return None
-            db.execute("INSERT INTO requests VALUES (?, ?, ?, 'reserved')", (request_id, digest, day))
-        return request_id
+            failures, open_until = db.execute("SELECT failures, open_until FROM circuit WHERE id=1").fetchone()
+            if open_until > timestamp:
+                return None, "provider_circuit_open"
+            if open_until:
+                db.execute("UPDATE circuit SET failures=0, open_until=0 WHERE id=1")
+            successes, attempts = db.execute(
+                "SELECT COALESCE(SUM(CASE WHEN status IN ('reserved','complete') THEN 1 ELSE 0 END),0), COUNT(*) FROM requests WHERE account=? AND day=?",
+                (digest, day)).fetchone()
+            if successes >= self.limit:
+                return None, "daily_quota_exhausted"
+            if attempts >= self.attempt_limit:
+                return None, "daily_attempt_budget_exhausted"
+            global_attempts = db.execute("SELECT COUNT(*) FROM requests WHERE day=?", (day,)).fetchone()[0]
+            if global_attempts >= self.global_limit:
+                return None, "service_attempt_budget_exhausted"
+            recent = db.execute("SELECT COUNT(*) FROM requests WHERE account=? AND started_at>?", (digest, timestamp - 60)).fetchone()[0]
+            if recent >= self.rate_limit:
+                return None, "account_rate_limited"
+            db.execute("INSERT INTO requests(id,account,day,status,started_at) VALUES (?, ?, ?, 'reserved', ?)",
+                       (request_id, digest, day, timestamp))
+        return request_id, None
 
-    def finish(self, request_id: str, success: bool):
+    def finish(self, request_id: str, success: bool, now=None):
+        now = now or datetime.now(timezone.utc)
+        timestamp = now.timestamp()
         with self._db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT status FROM requests WHERE id=?", (request_id,)).fetchone()
+            if row is None or row[0] != "reserved":
+                return # Completion is idempotent, even across process retries.
+            db.execute("UPDATE requests SET status=? WHERE id=?", ("complete" if success else "failed", request_id))
             if success:
-                db.execute("UPDATE requests SET status='complete' WHERE id=?", (request_id,))
+                # An older in-flight success must not reopen an already-open circuit.
+                db.execute("UPDATE circuit SET failures=0 WHERE id=1 AND open_until<=?", (timestamp,))
             else:
-                db.execute("DELETE FROM requests WHERE id=? AND status='reserved'", (request_id,))
+                failures, open_until = db.execute("SELECT failures, open_until FROM circuit WHERE id=1").fetchone()
+                failures += 1
+                if failures >= self.breaker_failures:
+                    open_until = max(open_until, timestamp + self.breaker_seconds)
+                db.execute("UPDATE circuit SET failures=?, open_until=? WHERE id=1", (failures, open_until))
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -181,7 +251,9 @@ class Gateway(ThreadingHTTPServer):
 
     def __init__(self, address, config: Configuration, upstream=upstream_call):
         self.config = config.validate()
-        self.quota = Quota(config.database, config.daily_limit)
+        self.quota = Quota(config.database, config.daily_limit, config.attempt_limit,
+                           config.account_rate_limit, config.global_daily_attempt_limit,
+                           config.breaker_failure_limit, config.breaker_cooldown_seconds)
         self.upstream = upstream
         self.slots = threading.BoundedSemaphore(config.max_inflight)
         super().__init__(address, Handler)
@@ -280,9 +352,9 @@ class Handler(BaseHTTPRequestHandler):
         reservation = None
         success = False
         try:
-            reservation = self.server.quota.reserve(account)
+            reservation, denied = self.server.quota.reserve_with_reason(account)
             if reservation is None:
-                self.fail(429, "daily_quota_exhausted")
+                self.fail(503 if denied == "provider_circuit_open" else 429, denied)
                 return
             result = normalize_response(self.server.upstream(self.server.config, payload), self.server.config.model)
             # Charge once a valid result exists, including if the client disconnects.
@@ -296,7 +368,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     self.server.quota.finish(reservation, False)
                 except sqlite3.Error:
-                    # Fail closed: an unreleased reservation consumes one allowance.
+                    # Fail closed: a reservation consumes both result and paid-attempt allowances.
                     pass
 
 

@@ -46,6 +46,10 @@ class AVAudioPlayer {
     var failNextStart = false
     var failTranscription = false
     var partialTranscription = false
+    var checkpointResults: [TranscriptionResult] = []
+    var waitForCancellation = false
+    var cancelled = false
+    var lastResumeSpans: [(Range<Double>, ProcessingSpan.Outcome)] = []
     var simulateSkip = false
     var lastFilter = false
     var failingNames: Set<String> = []
@@ -71,9 +75,16 @@ class AVAudioPlayer {
         starts += 1; self.completion = completion; startDate = Date(); currentURL = url
         return startDate
     }
+    func cancelTranscription() { cancelled = true }
     struct TranscriptionResult { var text: String; var segments: [TranscriptSegment]; var failedChunks: Int; var duration: TimeInterval; var spans: [(Range<Double>, ProcessingSpan.Outcome)] }
-    func transcribe(url: URL, language: AppLanguage, filterQuiet: Bool = false, sensitivity: Int = 3, protectedOffsets: [Double] = [], progress: @escaping @MainActor (Int, Int) -> Void) async throws -> TranscriptionResult {
+    func transcribe(url: URL, language: AppLanguage, filterQuiet: Bool = false, sensitivity: Int = 3, protectedOffsets: [Double] = [], resuming: TranscriptionResult? = nil, checkpoint: (@MainActor (TranscriptionResult) throws -> Void)? = nil, progress: @escaping @MainActor (Int, Int) -> Void) async throws -> TranscriptionResult {
         lastFilter = filterQuiet
+        cancelled = false; lastResumeSpans = resuming?.spans ?? []
+        for result in checkpointResults { try checkpoint?(result) }
+        if waitForCancellation {
+            while !cancelled { await Task.yield() }
+            throw CancellationError()
+        }
         if simulateSkip && filterQuiet && protectedOffsets.isEmpty { return .init(text: "", segments: [], failedChunks: 0, duration: 60, spans: [(0..<60, .skipped)]) }
         if failTranscription || failingNames.contains(url.lastPathComponent) { throw CaptureError.recording }
         progress(1, 1)
@@ -82,6 +93,7 @@ class AVAudioPlayer {
 }
 @MainActor class HealthSource {
     func context(authorize: Bool) async throws -> [MetricReading] { [] }
+    func contextSnapshot(authorize: Bool) async throws -> HealthMetricSnapshot { .init(readings: try await context(authorize: authorize)) }
     func start(onSample: @escaping (HeartSample) -> Void, onError: @escaping (String) -> Void) async throws -> Bool { true }
     func stop() {}
 }
@@ -98,15 +110,19 @@ typealias Archive = JournalArchive
 @MainActor class LocalStore {
     static var archive = Archive()
     static var failSave = false
+    static var failLoad = false
     static var failDelete = false
+    static var freeBytes: Int64? = nil
     static var deletedNames: [String] = []
     var directory = URL(fileURLWithPath: "/tmp")
     init() throws {}
-    func load() throws -> Archive { Self.archive }
+    func load() throws -> Archive { if Self.failLoad { throw CocoaError(.fileReadCorruptFile) }; return Self.archive }
     func save(_ archive: Archive) throws {
         if Self.failSave { throw CocoaError(.fileWriteOutOfSpace) }
         Self.archive = archive
     }
+    func metadataByteCount() throws -> Int64 { 0 }
+    func availableCapacity() throws -> Int64? { Self.freeBytes }
     func audioURL(_ id: UUID) -> URL { directory.appendingPathComponent(id.uuidString + ".m4a") }
     func deleteAudio(_ name: String) throws { if Self.failDelete { throw CocoaError(.fileWriteNoPermission) }; Self.deletedNames.append(name) }
 }

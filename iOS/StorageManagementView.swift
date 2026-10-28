@@ -22,6 +22,18 @@ struct StorageManagementView: View {
     private var l: Localizer { Localizer(locale: locale) }
     var body: some View {
         List {
+            if !model.canWriteArchive && !model.storagePaused {
+                Section(l("存储恢复")) {
+                    Text(l("已暂停采集以保护记录。释放空间后可重试保存，或先导出内存中的文字档案。"))
+                    Button(l("重试保存与待删除文件")) { model.retryStorage(); refresh() }
+                }
+            }
+            if !model.pendingAudioDeletions.isEmpty {
+                Section(l("待删除文件")) {
+                    Text(l("仍有 \(model.pendingAudioDeletions.count) 个音频等待删除；只有保存引用变更后才会删除文件。"))
+                    Button(l("重试保存与待删除文件")) { model.retryStorage(); refresh() }
+                }
+            }
             Section(l("本机空间")) {
                 LabeledContent(l("原始音频"), value: size(audioBytes))
                 LabeledContent(l("文字、健康与复盘档案"), value: size(archiveBytes))
@@ -41,7 +53,7 @@ struct StorageManagementView: View {
                 Button(l("导出 JSON 文字档案")) {
                     do { document = TextArchiveDocument(data: try model.exportTextArchive()); exporting = true; status = nil }
                     catch { status = l("导出未完成，请检查设备解锁与存储状态。") }
-                }.disabled(!model.canWriteArchive || model.busy)
+                }.disabled(!model.canExportArchive || model.busy)
                 Text(l("包含真实记录的文字、健康数据、人物、记忆和复盘，不包含音频、密钥或模拟数据；暂不支持导入恢复。导出文件含私人信息，请自行选择安全位置。"))
                     .font(.caption).foregroundStyle(.secondary)
             }

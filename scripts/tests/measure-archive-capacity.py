@@ -39,10 +39,22 @@ import WatchMindCore
         let decoded = try JSONDecoder().decode(JournalArchive.self, from: data)
         let end = Date()
         precondition(decoded.episodes.count == days && decoded.heartPoints.count == 60000)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("watchmind-capacity-store-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ArchiveFileStore(directory: directory)
+        _ = try store.load(); try store.save(archive)
+        archive.markers.append(.init(date: begin, recordingID: archive.episodes[0].id, note: "capacity fixture"))
+        let incrementalStart = Date(); try store.save(archive)
+        let incrementalMS = Date().timeIntervalSince(incrementalStart) * 1000
+        let restored = try ArchiveFileStore(directory: directory).load(); precondition(restored.markers.count == 1)
         let report: [String: Any] = ["recordings": days, "minutes_per_recording": minutes,
             "word_segments": days * minutes * 120, "heart_points": 60000, "archive_bytes": data.count,
             "encode_ms": encoded.timeIntervalSince(start) * 1000, "decode_ms": end.timeIntervalSince(encoded) * 1000,
-            "scope": "Synthetic core JSON; no audio, metrics, AI history, file I/O or iPhone profiling"]
+            "incremental_marker_save_ms": incrementalMS,
+            "incremental_new_blob_bytes": store.lastStatistics.newBlobBytes,
+            "incremental_new_blob_count": store.lastStatistics.newBlobCount,
+            "incremental_reused_blob_count": store.lastStatistics.reusedBlobCount,
+            "scope": "Synthetic core JSON and real temporary sharded-store I/O; no audio, metrics, AI history or iPhone profiling"]
         print(String(decoding: try JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]), as: UTF8.self))
     }
 }

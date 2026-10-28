@@ -22,6 +22,8 @@ final class AppModel: ObservableObject {
     var recordingPaused: Bool { recovery?.phase == .paused }
     private var activePartID: UUID?
     private var recordingDeadline: Task<Void, Never>?
+    private var spaceMonitor: Task<Void, Never>?
+    private var transcriptionCancellationRequested = false
     private var systemAudioInterrupted = false
     private var l: Localizer { Localizer(language: language) }
     private func describe(_ error: Error) -> String {
@@ -88,6 +90,8 @@ final class AppModel: ObservableObject {
     @Published var playingID: UUID?
     @Published var selectedDay = Date()
     @Published private(set) var storagePaused = false
+    @Published private(set) var pendingAudioDeletions: [String] = []
+    @Published private(set) var storageWriteFailed = false
     private let audio = AudioCapture()
     private let health = HealthSource()
     private let receiver = WatchReceiver()
@@ -105,11 +109,14 @@ final class AppModel: ObservableObject {
     private var notificationTokens: [NSObjectProtocol] = []
     private var writable = true
     private var archiveLoaded = false
+    private var loadFailed = false
+    private var deletingFiles = false
     private var archiveWriter = DeferredWriter<Archive>()
     private var revision = 0
 
     var busy: Bool { work.current != nil }
     var canWriteArchive: Bool { writable && archiveLoaded && !storagePaused }
+    var canExportArchive: Bool { archiveLoaded && UIApplication.shared.isProtectedDataAvailable }
     var visibleMetrics: [MetricReading] { demoMode ? demoMetrics : metrics }
     var dayHeartPoints: [HeartPoint] {
         heartPoints.filter { $0.isDemo == demoMode && Calendar.current.isDate($0.sample.date, inSameDayAs: selectedDay) }
@@ -133,7 +140,7 @@ final class AppModel: ObservableObject {
         receiver.onConnection = { [weak self] in self?.watchReachable = $0 }
         receiver.setLanguage(language.rawValue)
         receiver.activate()
-        Task { [weak self] in self?.processPendingCleanup() }
+        Task { [weak self] in self?.processPendingDeletions(); self?.processPendingCleanup() }
         notificationTokens.append(NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: nil) { [weak self] notification in
             guard let type = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt else { return }
             let options = (notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0
@@ -167,18 +174,18 @@ final class AppModel: ObservableObject {
             Task { @MainActor in self?.resumeStorage(); self?.resumeRecording(automatic: true) }
         })
     }
-    deinit { playbackDeadline?.cancel(); recordingDeadline?.cancel(); notificationTokens.forEach { NotificationCenter.default.removeObserver($0) } }
+    deinit { spaceMonitor?.cancel(); playbackDeadline?.cancel(); recordingDeadline?.cancel(); notificationTokens.forEach { NotificationCenter.default.removeObserver($0) } }
 
     /// Retain dirty state in memory while locked. Never replace an unreadable archive with an empty one.
     private func resumeStorage() {
-        guard writable else { return }
+        guard !loadFailed else { return }
         guard UIApplication.shared.isProtectedDataAvailable else { storagePaused = true; return }
         var newlyLoaded = false
         if !archiveLoaded {
             do {
                 let store = try LocalStore()
                 let archive = try store.load()
-                self.store = store; episodes = archive.episodes; reports = archive.reports
+                self.store = store; pendingAudioDeletions = archive.pendingAudioDeletions; episodes = archive.episodes; reports = archive.reports
                 markers = archive.markers.filter { $0.owner(in: archive.episodes) != nil }
                 aiReviews = archive.reviews
                 journal = archive.journal; journal.reconcile(episodes: episodes)
@@ -186,7 +193,7 @@ final class AppModel: ObservableObject {
                     journal.observations[i].end = journal.observations[i].lastKnownAt
                 }
                 heartPoints = Array(archive.heartPoints.filter { $0.sample.date >= Date().addingTimeInterval(-7 * 86400) }.suffix(60000))
-                metrics = archive.metrics.filter { $0.date >= Date().addingTimeInterval(-14 * 86400) }
+                metrics = MetricHistory.merge(existing: archive.metrics, snapshot: .init(readings: []), at: Date())
                 archiveLoaded = true
                 for index in episodes.indices where [.recording, .paused, .transcribing].contains(episodes[index].status) {
                     episodes[index].status = .failed
@@ -195,13 +202,14 @@ final class AppModel: ObservableObject {
                 newlyLoaded = true
             } catch {
                 if !UIApplication.shared.isProtectedDataAvailable { storagePaused = true; return }
-                writable = false
+                writable = false; loadFailed = true
                 self.error = l("无法读取本地档案，已停止写入以保护原文件：\(describe(error))")
                 return
             }
         }
-        storagePaused = false
-        if newlyLoaded || archiveWriter.hasPending { save() }
+        storagePaused = false; writable = true
+        if newlyLoaded || archiveWriter.hasPending || storageWriteFailed { save() }
+        if canWriteArchive { processPendingDeletions() }
     }
     @discardableResult func save() -> Bool {
         journal.reconcile(episodes: episodes)
@@ -210,12 +218,14 @@ final class AppModel: ObservableObject {
         revision += 1
         guard writable, archiveLoaded, let store else { return false }
         do {
-            let persisted = try archiveWriter.save(Archive(episodes: episodes, reports: reports, heartPoints: heartPoints, metrics: metrics, markers: markers, journal: journal, reviews: aiReviews),
+            let persisted = try archiveWriter.save(Archive(episodes: episodes, reports: reports, heartPoints: heartPoints, metrics: metrics, markers: markers, journal: journal, reviews: aiReviews, pendingAudioDeletions: pendingAudioDeletions),
                 isAvailable: { UIApplication.shared.isProtectedDataAvailable }, write: store.save)
             storagePaused = !persisted
+            if persisted { storageWriteFailed = false }
             return persisted
         } catch {
-            writable = false; observing = false; starts.cancel(); consenting = false
+            writable = false; storageWriteFailed = true; observing = false; starts.cancel(); consenting = false
+            if let id = activeObservationID, let i = journal.observations.firstIndex(where: { $0.id == id }) { journal.observations[i].end = Date() }; activeObservationID = nil
             health.stop(); stopRecording(); updateWakefulness()
             self.error = l("保存失败，已停止采集以保护数据，请不要退出应用：\(describe(error))")
             return false
@@ -263,7 +273,7 @@ final class AppModel: ObservableObject {
     private func ingest(_ sample: HeartSample) {
         guard observing, !demoMode, sample.bpm.isFinite, (30...240).contains(sample.bpm),
               sample.date >= (observationStart ?? .distantFuture),
-              abs(Date().timeIntervalSince(sample.date)) <= 45 else { return }
+              (-5...45).contains(Date().timeIntervalSince(sample.date)) else { return }
         if sample.date >= (latestSampleAt ?? .distantPast) { latestBPM = sample.bpm; latestSampleAt = sample.date }
         let baseline = detector.currentBaseline
         let small = detector.ingest(sample), large = largeDetector.ingest(sample)
@@ -274,7 +284,12 @@ final class AppModel: ObservableObject {
         }
     }
     private func accept(_ trigger: Trigger) {
-        guard observing, !demoMode, writable, !episodes.contains(where: { $0.id == trigger.id }) else { return }
+        guard observing, !demoMode, canWriteArchive, !episodes.contains(where: { $0.id == trigger.id }),
+              let since = observationStart, trigger.date >= since,
+              trigger.date.timeIntervalSince1970.isFinite,
+              trigger.bpm.isFinite, trigger.baseline.isFinite,
+              (30...240).contains(trigger.bpm), (30...240).contains(trigger.baseline),
+              trigger.date.timeIntervalSinceNow <= 5 else { return }
         guard !episodes.contains(where: { !$0.isDemo && abs($0.trigger.date.timeIntervalSince(trigger.date)) < 2 && abs($0.trigger.bpm - trigger.bpm) < 1 }) else { return }
         appendHeart(.init(date: trigger.date, bpm: trigger.bpm), baseline: trigger.baseline, force: true)
         let assessment = ContextAlgorithm.assess(trigger, readings: metrics.filter { contextMetricKinds.contains($0.kind) })
@@ -321,12 +336,19 @@ final class AppModel: ObservableObject {
             recordingID = nil; recovery = nil; updateWakefulness(); work.finish(operation); self.error = describe(error)
         }
     }
+    private func requireRecordingSpace(seconds: TimeInterval, reserveWholeSession: Bool) throws {
+        guard let store else { throw CocoaError(.fileWriteNoPermission) }
+        let available = try store.availableCapacity()
+        let reserve = Int64(64 * 1024 * 1024) + (reserveWholeSession ? Int64(max(0, seconds) * 8000) : 0)
+        if let available, available < reserve { throw CocoaError(.fileWriteOutOfSpace) }
+    }
     private func beginPart(id: UUID, operation: UUID, first: Bool) throws {
         guard let store else { throw AudioCapture.CaptureError.recording }
         let partID = UUID()
         let url = store.audioURL(first ? id : partID)
         let remaining = first ? (currentRecording?.maximumDuration ?? 3600) : (recovery?.remaining(at: Date()) ?? 0)
         guard remaining > 0 else { stopRecording(); return }
+        try requireRecordingSpace(seconds: remaining, reserveWholeSession: first)
         let start = try audio.start(url: url, maximumDuration: remaining) { [weak self] result in
             self?.partFinished(id: id, partID: partID, operation: operation, result: result)
         }
@@ -334,6 +356,15 @@ final class AppModel: ObservableObject {
         if first {
             recovery = RecordingRecovery(startedAt: start, maximumDuration: remaining)
             recordingDeadline?.cancel()
+            spaceMonitor?.cancel()
+            spaceMonitor = Task { [weak self] in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                    guard let self, self.recordingID == id else { return }
+                    do { try self.requireRecordingSpace(seconds: 0, reserveWholeSession: false) }
+                    catch { self.error = self.l("可用空间不足，已安全结束录音并保留文件。请释放空间后再继续。"); self.stopRecording(); return }
+                }
+            }
             recordingDeadline = Task { [weak self] in
                 do { try await Task.sleep(for: .seconds(remaining)) } catch { return }
                 guard self?.recordingID == id else { return }
@@ -402,14 +433,14 @@ final class AppModel: ObservableObject {
     }
     private func finishRecording(id: UUID, operation: UUID) {
         guard recordingID == id, work.owns(operation) else { return }
-        recordingDeadline?.cancel(); recordingDeadline = nil
+        recordingDeadline?.cancel(); recordingDeadline = nil; spaceMonitor?.cancel(); spaceMonitor = nil
         recordingID = nil; activePartID = nil; recovery = nil; updateWakefulness()
         modify(id) { $0.captureEnded = Date(); $0.status = .transcribing }
         Task { await self.transcribe(id: id, operation: operation) }
     }
-    private func transcribe(id: UUID, operation: UUID, force: Bool = false) async {
+    private func transcribe(id: UUID, operation: UUID, force: Bool = false, resumeCompleted: Bool = true) async {
         guard work.owns(operation) else { return }
-        transcriptionID = id
+        transcriptionCancellationRequested = false; transcriptionID = id
         defer { if transcriptionID == id { transcriptionID = nil }; work.finish(operation) }
         guard writable, UIApplication.shared.isProtectedDataAvailable else {
             modify(id) { $0.status = .failed; $0.note = "数据暂不可用，未转写；解锁后可手动重试。" }; return
@@ -440,57 +471,85 @@ final class AppModel: ObservableObject {
         var recoveredEnds: [UUID: Date] = [:]
         transcriptionCompleted = 0; transcriptionTotal = 0
         for part in parts {
+            let offset = part.startedAt.timeIntervalSince(event.captureStarted ?? part.startedAt)
+            func checkpoint(_ result: AudioCapture.TranscriptionResult) throws {
+                guard work.owns(operation), !transcriptionCancellationRequested else { throw CancellationError() }
+                files[part.audioName] = TranscriptionMerge.merge(previous: files[part.audioName], audioName: part.audioName,
+                    text: result.text, segments: result.segments,
+                    spans: result.spans.map { .init($0.0, outcome: $0.1) }, offset: offset,
+                    completeRange: 0..<max(0.001, result.duration))
+                journal.processing.removeAll { $0.recordingID == id && $0.audioName == part.audioName }
+                journal.processing += result.spans.map { range, outcome in
+                    ProcessingSpan(recordingID: id, audioName: part.audioName,
+                        start: part.startedAt.addingTimeInterval(range.lowerBound), end: part.startedAt.addingTimeInterval(range.upperBound), outcome: outcome)
+                }
+                if part.endedAt == nil, result.duration.isFinite, result.duration > 0 { recoveredEnds[part.id] = part.startedAt.addingTimeInterval(result.duration) }
+                guard let index = episodes.firstIndex(where: { $0.id == id }) else { throw CancellationError() }
+                if var savedParts = episodes[index].recordingParts {
+                    for i in savedParts.indices { if let end = recoveredEnds[savedParts[i].id] { savedParts[i].endedAt = end } }
+                    episodes[index].recordingParts = savedParts
+                    if event.captureEnded == nil { episodes[index].captureEnded = savedParts.compactMap(\.endedAt).max() }
+                }
+                let ordered = parts.compactMap { files[$0.audioName] }
+                episodes[index].fileTranscripts = ordered; episodes[index].transcript = ordered.map(\.text).joined(separator: "\n")
+                episodes[index].segments = ordered.flatMap(\.segments).sorted { $0.offset < $1.offset }
+                episodes[index].failedTranscriptionChunks = failures + result.failedChunks
+                reports = []
+                guard save() else { throw CocoaError(.fileWriteUnknown) }
+            }
             do {
+                guard !transcriptionCancellationRequested else { throw CancellationError() }
                 let url = store.directory.appendingPathComponent(part.audioName)
                 if episodes.first(where: { $0.id == id })?.audioQuality == nil {
                     let sensitivity = audioSensitivity
                     let quality = await Task.detached(priority: .utility) { AudioQuality.analyze(url: url, sensitivity: sensitivity) }.value
+                    guard !transcriptionCancellationRequested else { throw CancellationError() }
                     modify(id) { $0.audioQuality = quality }
+                    guard canWriteArchive else { throw CocoaError(.fileWriteUnknown) }
+                }
+                let spans = journal.processing.filter { $0.recordingID == id && $0.audioName == part.audioName }
+                let previous = files[part.audioName]
+                let localSegments: [TranscriptSegment] = (previous?.segments ?? []).map {
+                    TranscriptSegment(text: $0.text, offset: $0.offset - offset, duration: $0.duration)
+                }
+                let localSpans: [(Range<Double>, ProcessingSpan.Outcome)] = spans.compactMap { span in
+                    let lower = span.start.timeIntervalSince(part.startedAt), upper = span.end.timeIntervalSince(part.startedAt)
+                    guard lower.isFinite, upper.isFinite, lower >= 0, upper > lower else { return nil }
+                    return (lower..<upper, span.outcome)
+                }
+                var resuming: AudioCapture.TranscriptionResult?
+                // Old full-text-only files have no durable word-to-range alignment. Re-read them
+                // until fully replaced rather than skipping ranges whose new words were not saved.
+                let unalignedLegacy = previous?.segments.isEmpty == true && previous?.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                if resumeCompleted && !unalignedLegacy && !localSpans.isEmpty {
+                    resuming = AudioCapture.TranscriptionResult(text: previous?.text ?? "", segments: localSegments,
+                        failedChunks: spans.filter { $0.outcome == .failed }.count,
+                        duration: max(0.001, part.endedAt?.timeIntervalSince(part.startedAt) ?? 0.001), spans: localSpans)
                 }
                 let result = try await audio.transcribe(url: url,
                     language: event.transcriptionLanguage, filterQuiet: filterQuietAudio && !force, sensitivity: audioSensitivity,
                     protectedOffsets: markers.filter { $0.recordingID == id }.map { $0.date.timeIntervalSince(part.startedAt) }
-                        + journal.clips.filter { $0.recordingID == id && $0.confirmed }.map { $0.date.timeIntervalSince(part.startedAt) }) { [weak self] done, total in
+                        + journal.clips.filter { $0.recordingID == id && $0.confirmed }.map { $0.date.timeIntervalSince(part.startedAt) },
+                    resuming: resuming, checkpoint: checkpoint) { [weak self] done, total in
                         self?.transcriptionCompleted = finishedChunks + done
                         self?.transcriptionTotal = finishedChunks + total
                     }
-                journal.processing.removeAll { $0.recordingID == id && $0.audioName == part.audioName }
-                journal.processing += result.spans.map { range, outcome in
-                    ProcessingSpan(recordingID: id, audioName: part.audioName, start: part.startedAt.addingTimeInterval(range.lowerBound), end: part.startedAt.addingTimeInterval(range.upperBound), outcome: outcome)
-                }
+                try checkpoint(result)
                 successes += 1; failures += result.failedChunks
-                if part.endedAt == nil, result.duration.isFinite, result.duration > 0 {
-                    recoveredEnds[part.id] = part.startedAt.addingTimeInterval(result.duration)
-                }
-                let offset = part.startedAt.timeIntervalSince(event.captureStarted ?? part.startedAt)
-                files[part.audioName] = .init(audioName: part.audioName, text: result.text,
-                    segments: result.segments.map { .init(text: $0.text, offset: $0.offset + offset, duration: $0.duration) })
             } catch {
-                failures += 1; lastFailure = describe(error)
-                if let end = part.endedAt, end > part.startedAt {
-                    journal.processing.removeAll { $0.recordingID == id && $0.audioName == part.audioName }
+                if error is CancellationError || transcriptionCancellationRequested || !canWriteArchive {
+                    modify(id) { $0.status = .deferred; $0.note = "转写已暂停，已保存的分段会保留；可在处理中心继续。" }; return
+                }
+                failures += max(1, journal.processing.filter { $0.recordingID == id && $0.audioName == part.audioName && $0.outcome == .failed }.count); lastFailure = describe(error)
+                // Never replace already durable successful chunk spans with a whole-file failure.
+                if !journal.processing.contains(where: { $0.recordingID == id && $0.audioName == part.audioName }),
+                   let end = part.endedAt, end > part.startedAt {
                     journal.processing.append(.init(recordingID: id, audioName: part.audioName, start: part.startedAt, end: end, outcome: .failed))
                 }
+                modify(id) { $0.failedTranscriptionChunks = failures }
             }
             finishedChunks = max(finishedChunks + 1, transcriptionTotal)
             guard work.owns(operation) else { return }
-            // Checkpoint long jobs so a later suspension does not erase all completed text.
-            modify(id) {
-                if var parts = $0.recordingParts {
-                    for index in parts.indices {
-                        if let end = recoveredEnds[parts[index].id] { parts[index].endedAt = end }
-                    }
-                    $0.recordingParts = parts
-                    if event.captureEnded == nil { $0.captureEnded = parts.compactMap(\.endedAt).max() }
-                }
-                // A failed retry must not erase previously saved successful text.
-                if successes > 0 {
-                    let ordered = parts.compactMap { files[$0.audioName] }
-                    $0.fileTranscripts = ordered; $0.transcript = ordered.map(\.text).joined(separator: "\n")
-                    $0.segments = ordered.flatMap(\.segments).sorted { $0.offset < $1.offset }
-                }
-                $0.failedTranscriptionChunks = failures
-            }
         }
         let skippedAny = journal.processing.contains { $0.recordingID == id && $0.outcome == .skipped }
         modify(id) {
@@ -503,7 +562,11 @@ final class AppModel: ObservableObject {
             requestCleanup(id)
         }
     }
-    func retry(_ event: Episode) async {
+    func cancelTranscription() {
+        guard transcriptionID != nil else { return }
+        transcriptionCancellationRequested = true; audio.cancelTranscription()
+    }
+    func retry(_ event: Episode, reprocessAll: Bool = false) async {
         guard writable, archiveLoaded, !storagePaused, !event.isDemo,
               episodes.contains(where: { $0.id == event.id }), !event.audioNames.isEmpty, event.audioPurgedAt == nil,
               let operation = work.begin() else { return }
@@ -511,7 +574,7 @@ final class AppModel: ObservableObject {
         defer { work.finish(operation) }
         guard await audio.permissions() else { error = AudioCapture.CaptureError.permission.message(language: language); return }
         guard work.owns(operation) else { return }
-        await transcribe(id: event.id, operation: operation, force: true)
+        await transcribe(id: event.id, operation: operation, force: true, resumeCompleted: !reprocessAll)
     }
     private func updateWakefulness() {
         UIApplication.shared.isIdleTimerDisabled = keepAwake && foreground && (observing || recordingID != nil)
@@ -534,12 +597,9 @@ final class AppModel: ObservableObject {
         refreshingMetrics = true; lastContextRefresh = Date()
         defer { if contextRefresh.finish(request) { refreshingMetrics = false } }
         do {
-            let rows = try await health.context(authorize: authorize)
+            let snapshot = try await health.contextSnapshot(authorize: authorize)
             guard contextRefresh.owns(request), writable, archiveLoaded else { return }
-            var combined = Dictionary(metrics.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
-            for row in rows where row.kind.accepts(row.value) { combined[row.id] = row }
-            let recent = combined.values.filter { $0.date >= Date().addingTimeInterval(-14 * 86400) }
-            metrics = Dictionary(grouping: recent, by: \.kind).values.flatMap { $0.sorted { $0.date > $1.date }.prefix(500) }.sorted { $0.date < $1.date }
+            metrics = MetricHistory.merge(existing: metrics, snapshot: snapshot, at: Date())
             save()
         } catch { self.error = describe(error) }
     }
@@ -666,16 +726,15 @@ final class AppModel: ObservableObject {
     }
     func storageUsage() throws -> (archive: Int64, audio: Int64) {
         guard let store, canWriteArchive else { throw CocoaError(.fileReadNoPermission) }
-        var archive: Int64 = 0, audio: Int64 = 0
+        let archive = try store.metadataByteCount(); var audio: Int64 = 0
         for url in try FileManager.default.contentsOfDirectory(at: store.directory, includingPropertiesForKeys: [.fileSizeKey]) {
             let size = Int64(try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
-            if url.lastPathComponent == "archive.json" { archive += size }
-            else if url.pathExtension == "m4a" { audio += size }
+            if url.pathExtension == "m4a" { audio += size }
         }
         return (archive, audio)
     }
     func exportTextArchive() throws -> Data {
-        guard canWriteArchive else { throw CocoaError(.fileReadNoPermission) }
+        guard canExportArchive else { throw CocoaError(.fileReadNoPermission) }
         var exported = journal
         exported.clips.removeAll { $0.isDemo }; exported.people.removeAll { $0.isDemo }; exported.memories.removeAll { $0.isDemo }
         exported.reflections.removeAll { $0.isDemo }; exported.plans.removeAll { $0.isDemo }
@@ -686,23 +745,43 @@ final class AppModel: ObservableObject {
             reports: reports.filter { !($0.evidenceIDs ?? $0.episodeIDs).isEmpty && Set($0.evidenceIDs ?? $0.episodeIDs).isSubset(of: evidenceIDs) },
             heartPoints: heartPoints.filter { !$0.isDemo }, metrics: metrics, markers: markers.filter { !$0.isDemo }, journal: exported, reviews: aiReviews.filter { !$0.evidence.isDemo }))
     }
+    func retryStorage() {
+        // An explicit retry re-reads the original file; it never substitutes an empty archive for bad data.
+        if !archiveLoaded { loadFailed = false; writable = true }
+        resumeStorage()
+        if canWriteArchive { processPendingCleanup(); if pendingAudioDeletions.isEmpty { error = nil } }
+    }
+    /// Commit removal of all references and a durable deletion intent before touching any file.
     func delete(_ event: Episode) {
-        guard !busy, writable, !storagePaused, archiveLoaded else { return }
-        do {
-            for name in event.audioNames { try store?.deleteAudio(name) }
-            player?.stop(); playingID = nil
-            episodes.removeAll { $0.id == event.id || $0.linkedRecordingID == event.id }
-            aiReviews.removeAll { $0.evidence.selection.recordingID == event.id }
-            markers.removeAll { $0.recordingID == event.id }; journal.reconcile(episodes: episodes); reports = []; save()
-        } catch { self.error = l("删除音频失败：\(describe(error))") }
+        guard !busy, canWriteArchive, let current = episodes.first(where: { $0.id == event.id }) else { return }
+        playbackDeadline?.cancel(); player?.stop(); playingID = nil
+        pendingAudioDeletions = Array(Set(pendingAudioDeletions + current.audioNames)).sorted()
+        episodes.removeAll { $0.id == current.id || $0.linkedRecordingID == current.id }
+        aiReviews.removeAll { $0.evidence.selection.recordingID == current.id }
+        markers.removeAll { $0.recordingID == current.id }; journal.reconcile(episodes: episodes); reports = []
+        if save() { processPendingDeletions() }
     }
     func erase() {
-        guard !busy, writable, !storagePaused, archiveLoaded else { return }
-        stop(); contextRefresh.cancel(); refreshingMetrics = false; player?.stop(); playingID = nil
+        guard !busy, canWriteArchive else { return }
+        stop(); guard canWriteArchive else { return }
+        contextRefresh.cancel(); refreshingMetrics = false; playbackDeadline?.cancel(); player?.stop(); playingID = nil
+        pendingAudioDeletions = Array(Set(pendingAudioDeletions + episodes.flatMap(\.audioNames))).sorted()
+        aiReviews = []; episodes = []; markers = []; journal = JournalCollection(); lastMarkedID = nil
+        reports = []; heartPoints = []; metrics = []; demoMetrics = []
+        if save() { processPendingDeletions() }
+    }
+    func processPendingDeletions() {
+        guard canWriteArchive, !busy, !deletingFiles, !pendingAudioDeletions.isEmpty, let store else { return }
+        deletingFiles = true; defer { deletingFiles = false }
+        // Never delete a file still referenced by a live record, even if an imported/corrupt queue says otherwise.
+        let live = Set(episodes.flatMap(\.audioNames))
+        guard live.isDisjoint(with: Set(pendingAudioDeletions)) else {
+            error = l("删除队列与现有录音冲突，已停止清理以保护文件。"); return
+        }
         do {
-            for event in episodes { for name in event.audioNames { try store?.deleteAudio(name) } }
-            aiReviews = []; episodes = []; markers = []; journal = JournalCollection(); lastMarkedID = nil; reports = []; heartPoints = []; metrics = []; demoMetrics = []; save()
-        } catch { self.error = l("清除未完成：\(describe(error))") }
+            for name in pendingAudioDeletions { try store.deleteAudio(name) }
+            pendingAudioDeletions = []; save()
+        } catch { self.error = l("文件删除尚未完成，已保存待办；可在存储管理中重试。") }
     }
     func summarize() async {
         guard !summarizing, !summaryEvidenceIDs.isEmpty, !busy else { return }

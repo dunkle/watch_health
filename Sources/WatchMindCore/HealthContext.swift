@@ -52,8 +52,11 @@ public struct MetricReading: Codable, Identifiable, Sendable {
     public var value: Double
     public var date: Date
     public var source: String
-    public init(id: String = UUID().uuidString, kind: MetricKind, value: Double, date: Date, source: String) {
-        self.id = id; self.kind = kind; self.value = value; self.date = date; self.source = source
+    /// Stable, locally pseudonymized source/device identity. Legacy archives retain named-source isolation.
+    public var sourceID: String?
+    public var comparableSourceID: String { sourceID.map { "stable:" + $0 } ?? "legacy:" + source }
+    public init(id: String = UUID().uuidString, kind: MetricKind, value: Double, date: Date, source: String, sourceID: String? = nil) {
+        self.id = id; self.kind = kind; self.value = value; self.date = date; self.source = source; self.sourceID = sourceID
     }
     public func isFresh(at date: Date) -> Bool {
         kind.accepts(value) && (0...kind.freshness).contains(date.timeIntervalSince(self.date))
@@ -67,18 +70,24 @@ public struct EventAssessment: Codable, Sendable {
     public var contributing: [MetricKind]
     public var unavailable: [MetricKind]
     public var readings: [MetricReading]
-    public var algorithmVersion = "context-1"
+    public var algorithmVersion = "context-2"
 }
 
 public enum ContextAlgorithm {
     public static func latest(_ kind: MetricKind, in readings: [MetricReading], at now: Date) -> MetricReading? {
         readings.filter { $0.kind == kind && $0.date <= now && kind.accepts($0.value) }.max { $0.date == $1.date ? $0.id < $1.id : $0.date < $1.date }
     }
+    /// Exactly fourteen preceding calendar days, including across daylight-saving changes.
+    public static func historyStart(before date: Date, calendar: Calendar = .current) -> Date {
+        let start = calendar.startOfDay(for: date)
+        return calendar.date(byAdding: .day, value: -14, to: start) ?? start
+    }
     /// One value per day prevents a high-frequency source from dominating a personal baseline.
     public static func baseline(_ kind: MetricKind, readings: [MetricReading], before date: Date,
                                 calendar: Calendar = .current) -> (median: Double, mad: Double)? {
         let start = calendar.startOfDay(for: date)
-        let past = readings.filter { $0.kind == kind && $0.date < start && $0.date >= start.addingTimeInterval(-14 * 86400) && kind.accepts($0.value) }
+        let past = readings.filter { $0.kind == kind && $0.date < start && $0.date >= historyStart(before: date, calendar: calendar) && kind.accepts($0.value) }
+        guard Set(past.map(\.comparableSourceID)).count == 1 else { return nil }
         let daily = Dictionary(grouping: past, by: { calendar.startOfDay(for: $0.date) }).values.map { median($0.map(\.value)) }
         guard daily.count >= 5 else { return nil }
         let center = median(daily)
@@ -100,7 +109,7 @@ public enum ContextAlgorithm {
             case .sleepScore:
                 w = 0.07; deviation = max(0, (80 - reading.value) / 50)
             default:
-                guard let base = baseline(reading.kind, readings: readings, before: now) else { continue }
+                guard let base = baseline(reading.kind, readings: readings.filter { $0.comparableSourceID == reading.comparableSourceID }, before: now) else { continue }
                 let floor: Double
                 switch reading.kind {
                 case .oxygen: w = 0.08; floor = 2

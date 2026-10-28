@@ -179,11 +179,17 @@ struct ProcessingCenterView: View {
                 if let date = model.lastWatchPacketAt { Text(l("最近收到Watch数据：\(l.date(date, includeDate: true, seconds: true))")) }
                 Text(l("当前Watch只传输心率与事件，录音保存在手机；没有手表音频同步队列。"))
                     .font(.caption).foregroundStyle(.secondary)
-                if model.storagePaused {
+                if model.storageWriteFailed {
+                    Text(l("已暂停采集以保护记录。释放空间后可重试保存，或先导出内存中的文字档案。"))
+                    Button(l("重试保存与待删除文件")) { model.retryStorage() }
+                    NavigationLink(l("存储与导出")) { StorageManagementView() }
+                } else if model.storagePaused {
                     Text(l("设备锁定，暂缓写入；解锁后自动重试保存。"))
                 } else if !model.canWriteArchive {
                     Text(l("本地档案读取或写入受阻，采集不可用；请先处理存储错误。"))
                         .foregroundStyle(.red)
+                    Button(l("重试保存与待删除文件")) { model.retryStorage() }
+                    NavigationLink(l("存储与导出")) { StorageManagementView() }
                 } else {
                     Text(l("档案状态依据本机记录，音频可用性以实际播放和转写结果为准。"))
                         .font(.caption).foregroundStyle(.secondary)
@@ -217,6 +223,7 @@ struct ProcessingCenterView: View {
                                 Button(l("保留原音频，取消清理")) { model.cancelCleanup(owner.id) }.disabled(!model.canWriteArchive)
                             }
                         }
+                        if model.transcriptionID == owner.id { Button(l("暂停转写，保留已完成分段")) { model.cancelTranscription() } }
                         if model.transcriptionID == owner.id, model.transcriptionTotal > 0 {
                             Text(l("当前已处理分段：\(model.transcriptionCompleted)/\(model.transcriptionTotal)"))
                             ProgressView(value: Double(model.transcriptionCompleted), total: Double(max(1, model.transcriptionTotal)))
@@ -225,13 +232,15 @@ struct ProcessingCenterView: View {
                             if model.recordingPaused { Button(l("继续录音")) { model.resumeRecording() } }
                             Button(l("结束并转写")) { model.stopRecording() }
                         } else if (owner.status == .failed || owner.status == .partial || owner.status == .deferred), owner.audioPurgedAt == nil, !owner.audioNames.isEmpty, !owner.isDemo {
-                            Button(l("重试本地转写")) { Task { await model.retry(owner) } }.disabled(model.busy || !model.canWriteArchive)
+                            Button(l("继续未完成转写")) { Task { await model.retry(owner) } }.disabled(model.busy || !model.canWriteArchive)
+                            Button(l("重新识别全部片段")) { Task { await model.retry(owner, reprocessAll: true) } }.disabled(model.busy || !model.canWriteArchive)
                         }
                     }.padding(.vertical, 5)
                 }
             }
             Section {
-                Text(l("仅展示已存在的本地任务，不会自动批量重试。系统终止后未完成任务需手动恢复转写。"))
+                Text(l("有逐词时间的录音可继续已完成分段；无对齐旧全文会保留旧文，并可能重新识别全部片段。"))
+                    Text(l("仅展示已存在的本地任务，不会自动批量重试。系统终止后未完成任务需手动恢复转写。"))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }.navigationTitle(l("处理中心"))
